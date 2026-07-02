@@ -44,6 +44,15 @@ class NetworkScanner:
         self._results.sort(key=lambda d: [int(o) for o in d["ip"].split(".")])
         return self._results
 
+    @staticmethod
+    def _scan_port(ip: str, port: int, timeout: int) -> int | None:
+        """扫描单个端口"""
+        try:
+            with socket.create_connection((ip, port), timeout=timeout):
+                return port
+        except (OSError, socket.timeout):
+            return None
+
     def _probe(self, ip: str, timeout: int) -> dict | None:
         """探测单台设备"""
         start = time.time()
@@ -56,7 +65,7 @@ class NetworkScanner:
         # 找主机名
         hostname = self._resolve_hostname(ip)
 
-        # 测常见端口
+        # 并发扫描端口
         open_ports = self._scan_ports(ip, timeout=min(2, timeout))
 
         # 识别厂商（通过端口 banner）
@@ -92,18 +101,21 @@ class NetworkScanner:
 
     @staticmethod
     def _scan_ports(ip: str, timeout: int = 2) -> list[int]:
-        """扫描常见运维端口"""
+        """并发扫描常见运维端口"""
         common_ports = [22, 23, 161, 443, 80, 8443]
         open_ports: list[int] = []
 
-        for port in common_ports:
-            try:
-                with socket.create_connection((ip, port), timeout=timeout):
-                    open_ports.append(port)
-            except (OSError, socket.timeout):
-                continue
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(common_ports)) as executor:
+            fut_to_port = {
+                executor.submit(NetworkScanner._scan_port, ip, port, timeout): port
+                for port in common_ports
+            }
+            for fut in concurrent.futures.as_completed(fut_to_port):
+                result = fut.result()
+                if result is not None:
+                    open_ports.append(result)
 
-        return open_ports
+        return sorted(open_ports)
 
     @staticmethod
     def _identify_vendor(ip: str, open_ports: list[int]) -> str:
@@ -125,7 +137,7 @@ class NetworkScanner:
         return "unknown"
 
 
-def quick_scan(subnet: str = "192.168.1.0/24") -> list[dict]:
+def quick_scan(subnet: str) -> list[dict]:
     """便捷扫描函数"""
     scanner = NetworkScanner()
     return scanner.scan(subnet)

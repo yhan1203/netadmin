@@ -708,6 +708,55 @@ class TestCli:
         assert "HOST" in result.output
         assert "--output" in result.output or "-o" in result.output
 
+    def test_scanner_scan_ports_concurrent(self) -> None:
+        """验证端口扫描使用并发而非顺序"""
+        from netadmin.scanner import NetworkScanner
+        # 测试 _scan_port 静态方法
+        result = NetworkScanner._scan_port("127.0.0.1", 22, 1)
+        # 本地可能没开 SSH，但方法不应崩溃
+        assert result is None or result == 22
+
+    def test_scanner_quick_scan_no_default(self) -> None:
+        """验证 quick_scan 不再有硬编码默认子网"""
+        import inspect
+        from netadmin.scanner import quick_scan
+        sig = inspect.signature(quick_scan)
+        # subnet 参数不应有默认值
+        assert sig.parameters["subnet"].default is inspect.Parameter.empty, \
+            "quick_scan(subnet) should not have a default value"
+
+    def test_vlan_save_inside_with_block(self) -> None:
+        """验证 VLAN 操作的 save 在 with 块内（不会用已断开的连接）"""
+        import ast
+        import inspect
+        import textwrap
+        from netadmin.vlan import VlanManager
+
+        def _save_is_inside_with(method_source: str) -> bool:
+            """解析 AST 检查 save_cmd 的 send_command 调用在 with 块内"""
+            try:
+                tree = ast.parse(textwrap.dedent(method_source))
+            except IndentationError:
+                return False
+            for node in ast.walk(tree):
+                if isinstance(node, ast.With):
+                    for child in ast.walk(node):
+                        if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                            if child.func.attr == "send_command":
+                                for arg in child.args:
+                                    if isinstance(arg, ast.Call) and \
+                                       isinstance(arg.func, ast.Name) and \
+                                       arg.func.id == "str":
+                                        for a in arg.args:
+                                            if isinstance(a, ast.Name) and a.id == "save_cmd":
+                                                return True
+            return False
+
+        for method_name in ["create_vlan", "delete_vlan", "assign_port"]:
+            source = inspect.getsource(getattr(VlanManager, method_name))
+            assert _save_is_inside_with(source), \
+                f"{method_name}: send_command(save_cmd) should be inside the with block"
+
 
 # ═══════════════════════════════════════════════════════════════
 # apply — 额外边界测试

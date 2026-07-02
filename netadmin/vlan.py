@@ -44,10 +44,9 @@ class VlanManager:
             cmds = [cmds]
 
         with Connector(self.config) as conn:
-            output = conn.send_config_set(cmds)
-
-        save_cmd = resolve("save_config", self.vendor)
-        conn.send_command(str(save_cmd))
+            conn.send_config_set(cmds)
+            save_cmd = resolve("save_config", self.vendor)
+            conn.send_command(str(save_cmd))
 
         return f"VLAN {vlan_id} created" + (f" ({name})" if name else "")
 
@@ -57,9 +56,8 @@ class VlanManager:
 
         with Connector(self.config) as conn:
             conn.send_config_set([str(cmd)])
-
-        save_cmd = resolve("save_config", self.vendor)
-        conn.send_command(str(save_cmd))
+            save_cmd = resolve("save_config", self.vendor)
+            conn.send_command(str(save_cmd))
 
         return f"VLAN {vlan_id} deleted"
 
@@ -80,10 +78,9 @@ class VlanManager:
             cmds = [cmds]
 
         with Connector(self.config) as conn:
-            output = conn.send_config_set(cmds)
-
-        save_cmd = resolve("save_config", self.vendor)
-        conn.send_command(str(save_cmd))
+            conn.send_config_set(cmds)
+            save_cmd = resolve("save_config", self.vendor)
+            conn.send_command(str(save_cmd))
 
         return f"Port {port} assigned to VLAN {vlan_id} ({mode})"
 
