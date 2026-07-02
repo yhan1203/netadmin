@@ -165,8 +165,8 @@ def vlan() -> None:
 
 @vlan.command(name="list")
 @click.argument("host")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def vlan_list(host: str, username: str | None, password: str | None) -> None:
     """查看设备的 VLAN 列表"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -179,8 +179,8 @@ def vlan_list(host: str, username: str | None, password: str | None) -> None:
 @click.argument("host")
 @click.argument("vlan_id", type=int)
 @click.argument("name", default="")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def create(host: str, vlan_id: int, name: str, username: str | None, password: str | None) -> None:
     """创建 VLAN"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -192,8 +192,8 @@ def create(host: str, vlan_id: int, name: str, username: str | None, password: s
 @vlan.command()
 @click.argument("host")
 @click.argument("vlan_id", type=int)
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def delete(host: str, vlan_id: int, username: str | None, password: str | None) -> None:
     """删除 VLAN"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -207,8 +207,8 @@ def delete(host: str, vlan_id: int, username: str | None, password: str | None) 
 @click.argument("port")
 @click.argument("vlan_id", type=int)
 @click.option("--mode", default="access", help="端口模式: access|trunk")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def assign(host: str, port: str, vlan_id: int, mode: str, username: str | None, password: str | None) -> None:
     """端口分配 VLAN"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -227,8 +227,8 @@ def interface() -> None:
 
 @interface.command(name="list")
 @click.argument("host")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def interface_list(host: str, username: str | None, password: str | None) -> None:
     """查看设备接口状态"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -240,8 +240,8 @@ def interface_list(host: str, username: str | None, password: str | None) -> Non
 @interface.command()
 @click.argument("host")
 @click.argument("interface_name")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def detail(host: str, interface_name: str, username: str | None, password: str | None) -> None:
     """查看单个接口详情"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -260,8 +260,8 @@ def backup() -> None:
 
 @backup.command()
 @click.argument("host", required=False)
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 @click.option("--comment", "-m", help="备份备注")
 def run(host: str | None, username: str | None, password: str | None, comment: str | None) -> None:
     """备份设备配置（不指定 host 则备份全部）"""
@@ -334,8 +334,8 @@ def restore(id: int) -> None:
 @cli.command()
 @click.argument("host")
 @click.option("--output", "-o", help="输出模板路径（默认打印到终端）")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 def learn(host: str, output: str | None, username: str | None, password: str | None) -> None:
     """从设备学习配置，生成可复用模板（照猫）"""
     cfg = settings.resolve_device(host, username=username or "", password=password or "")
@@ -361,8 +361,8 @@ def learn(host: str, output: str | None, username: str | None, password: str | N
 @cli.command()
 @click.argument("template")
 @click.option("--device", "-d", required=True, help="目标设备 host（支持逗号分隔多个）")
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 @click.option("--dry-run", is_flag=True, help="试运行，不实际执行")
 def apply(template: str, device: str, username: str | None, password: str | None, dry_run: bool) -> None:
     """按模板配置目标设备（画虎）"""
@@ -440,8 +440,8 @@ def scan(subnet: str, timeout: int, threads: int) -> None:
 
 @cli.command()
 @click.argument("host", required=False)
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 @click.option("--all", "check_all", is_flag=True, help="检查所有设备")
 def check(host: str | None, username: str | None, password: str | None, check_all: bool) -> None:
     """设备健康检查（CPU/内存/温度/日志错误）"""
@@ -480,8 +480,8 @@ def check(host: str | None, username: str | None, password: str | None, check_al
 
 @cli.command()
 @click.argument("host", required=False)
-@click.option("--username", "-u")
-@click.option("--password", "-p")
+@click.option("--username", "-u", help="用户名")
+@click.option("--password", "-p", help="密码")
 @click.option("--all", "audit_all", is_flag=True, help="审计所有设备")
 def audit(host: str | None, username: str | None, password: str | None, audit_all: bool) -> None:
     """安全合规审计"""
