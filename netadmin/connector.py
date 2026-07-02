@@ -81,7 +81,12 @@ class Connector:
                 global_delay_factor=2,  # 华为设备有时反应慢
                 fast_cli=False,         # 兼容性优先
             )
-            self._conn.enable()  # 进 enable/privileged 模式
+            # 尝试进入 enable/privileged 模式
+            # 华为设备有时不支持 enable 模式，静默跳过
+            try:
+                self._conn.enable()
+            except Exception:
+                pass
         except Exception as e:
             raise ConnectorError(str(e), device=self.config["host"]) from e
 
@@ -94,6 +99,22 @@ class Connector:
                 command,
                 delay_factor=2,
                 expect_string=r"[#>\]]$",  # 通用提示符匹配
+            )
+            return output.strip()
+        except Exception as e:
+            raise ConnectorError(str(e), device=self.config["host"], command=command) from e
+
+    def send_command_timing(self, command: str, delay_factor: int = 1) -> str:
+        """发送命令并返回输出（基于时间等待，不匹配提示符）
+
+        用于 save 等需要响应 [Y/N] 确认弹窗的命令。
+        """
+        if not self._conn:
+            raise ConnectorError("Not connected", device=self.config["host"])
+        try:
+            output = self._conn.send_command_timing(
+                command,
+                delay_factor=delay_factor,
             )
             return output.strip()
         except Exception as e:

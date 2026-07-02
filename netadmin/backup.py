@@ -68,7 +68,7 @@ class BackupManager:
             output = conn.send_command(cmd)
 
         # 版本号: 时间戳
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         version = now.strftime("%Y%m%d_%H%M%S")
 
         # 存文件

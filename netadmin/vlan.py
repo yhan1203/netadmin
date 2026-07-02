@@ -46,7 +46,7 @@ class VlanManager:
         with Connector(self.config) as conn:
             conn.send_config_set(cmds)
             save_cmd = resolve("save_config", self.vendor)
-            conn.send_command(str(save_cmd))
+            self._save_with_confirm(conn, str(save_cmd))
 
         return f"VLAN {vlan_id} created" + (f" ({name})" if name else "")
 
@@ -57,7 +57,7 @@ class VlanManager:
         with Connector(self.config) as conn:
             conn.send_config_set([str(cmd)])
             save_cmd = resolve("save_config", self.vendor)
-            conn.send_command(str(save_cmd))
+            self._save_with_confirm(conn, str(save_cmd))
 
         return f"VLAN {vlan_id} deleted"
 
@@ -80,9 +80,18 @@ class VlanManager:
         with Connector(self.config) as conn:
             conn.send_config_set(cmds)
             save_cmd = resolve("save_config", self.vendor)
-            conn.send_command(str(save_cmd))
+            self._save_with_confirm(conn, str(save_cmd))
 
         return f"Port {port} assigned to VLAN {vlan_id} ({mode})"
+
+    @staticmethod
+    def _save_with_confirm(conn: Connector, save_cmd: str) -> None:
+        """执行保存命令，处理华为的 [Y/N] 确认弹窗"""
+        output = conn.send_command_timing(save_cmd, delay_factor=1)
+        if "[Y/N]" in output or "[y/n]" in output.lower():
+            conn.send_command_timing("Y", delay_factor=1)
+        elif "(y/n)" in output.lower():
+            conn.send_command_timing("y", delay_factor=1)
 
     def _parse_vlan_output(self, output: str) -> list[dict]:
         """解析 VLAN 输出，兼容华为和思科格式"""

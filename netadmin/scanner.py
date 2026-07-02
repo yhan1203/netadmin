@@ -27,7 +27,15 @@ class NetworkScanner:
             list[dict]: 发现的设备列表
         """
         network = ipaddress.ip_network(subnet, strict=False)
-        hosts = [str(ip) for ip in network.hosts()]
+        # /31 和 /32 的 hosts() 返回空列表，需要 fallback
+        network_hosts = list(network.hosts())
+        if not network_hosts:
+            # /31 子网只有 2 个可用 IP，/32 只有 1 个
+            hosts = [str(network.network_address)]
+            if network.prefixlen == 31:
+                hosts.append(str(network.broadcast_address))
+        else:
+            hosts = [str(ip) for ip in network_hosts]
 
         self._results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:

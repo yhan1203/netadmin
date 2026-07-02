@@ -583,10 +583,8 @@ def check(host: str | None, username: str | None, password: str | None, check_al
 
     if check_all or not host:
         targets = _resolve_devices(())
-    elif host:
-        targets = [settings.resolve_device(host, username=username or "", password=password or "")]
     else:
-        targets = _resolve_devices(())
+        targets = [settings.resolve_device(host, username=username or "", password=password or "")]
 
     any_issue = False
 
@@ -639,10 +637,8 @@ def audit(host: str | None, username: str | None, password: str | None, audit_al
 
     if audit_all or not host:
         targets = _resolve_devices(())
-    elif host:
-        targets = [settings.resolve_device(host, username=username or "", password=password or "")]
     else:
-        targets = _resolve_devices(())
+        targets = [settings.resolve_device(host, username=username or "", password=password or "")]
 
     for dev in targets:
         with console.status(f"Auditing {dev['host']}..."):

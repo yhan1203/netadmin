@@ -733,23 +733,34 @@ class TestCli:
         from netadmin.vlan import VlanManager
 
         def _save_is_inside_with(method_source: str) -> bool:
-            """解析 AST 检查 save_cmd 的 send_command 调用在 with 块内"""
+            """解析 AST 检查 save_cmd 的调用在 with 块内"""
             try:
                 tree = ast.parse(textwrap.dedent(method_source))
             except IndentationError:
                 return False
             for node in ast.walk(tree):
-                if isinstance(node, ast.With):
-                    for child in ast.walk(node):
-                        if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
-                            if child.func.attr == "send_command":
-                                for arg in child.args:
-                                    if isinstance(arg, ast.Call) and \
-                                       isinstance(arg.func, ast.Name) and \
-                                       arg.func.id == "str":
-                                        for a in arg.args:
-                                            if isinstance(a, ast.Name) and a.id == "save_cmd":
-                                                return True
+                if not isinstance(node, ast.With):
+                    continue
+                for child in ast.walk(node):
+                    if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                        # 模式1: conn.send_command(str(save_cmd))
+                        if child.func.attr == "send_command":
+                            for arg in child.args:
+                                if isinstance(arg, ast.Call) and \
+                                   isinstance(arg.func, ast.Name) and \
+                                   arg.func.id == "str":
+                                    for a in arg.args:
+                                        if isinstance(a, ast.Name) and a.id == "save_cmd":
+                                            return True
+                        # 模式2: self._save_with_confirm(conn, str(save_cmd))
+                        if child.func.attr == "_save_with_confirm":
+                            for arg in child.args:
+                                if isinstance(arg, ast.Call) and \
+                                   isinstance(arg.func, ast.Name) and \
+                                   arg.func.id == "str":
+                                    for a in arg.args:
+                                        if isinstance(a, ast.Name) and a.id == "save_cmd":
+                                            return True
             return False
 
         for method_name in ["create_vlan", "delete_vlan", "assign_port"]:

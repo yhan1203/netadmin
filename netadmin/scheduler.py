@@ -142,7 +142,7 @@ class BackupScheduler:
         Returns:
             int: 新任务的 ID
         """
-        now = datetime.datetime.now().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         cursor = self.db.execute(
             "INSERT INTO backup_schedules (name, crontab, description, enabled, created_at) VALUES (?, ?, ?, 1, ?)",
             (name, crontab, description, now),
@@ -207,7 +207,7 @@ class BackupScheduler:
                         sched_result["success"] = False
 
             # 更新 last_run
-            now = datetime.datetime.now().isoformat()
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             status = "OK" if sched_result["success"] else "FAIL"
             self.db.execute(
                 "UPDATE backup_schedules SET last_run = ?, last_result = ? WHERE id = ?",

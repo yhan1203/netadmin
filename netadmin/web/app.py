@@ -73,7 +73,12 @@ def _require_auth(request: Request) -> None:
 # ── CSRF 保护 ─────────────────────────────────────────────────
 # 验证 POST 请求的 Origin/Referer 头，防止跨站请求伪造
 
-_CSRF_ORIGINS = os.environ.get("NETADMIN_CSRF_ORIGINS", "").split(",") if os.environ.get("NETADMIN_CSRF_ORIGINS") else []
+_CSRF_ORIGINS = [o.strip() for o in os.environ.get("NETADMIN_CSRF_ORIGINS", "").split(",") if o.strip()]
+# 添加到默认允许列表（包含常见的带端口变体）
+_DEFAULT_CSRF_ORIGINS = [
+    "http://127.0.0.1", "http://127.0.0.1:8099", "http://127.0.0.1:8080",
+    "http://localhost", "http://localhost:8099", "http://localhost:8080",
+]
 
 
 def _check_csrf(request: Request) -> None:
@@ -86,7 +91,7 @@ def _check_csrf(request: Request) -> None:
     if not origin and not referer:
         return
     # 检查是否匹配允许的来源
-    allowed = _CSRF_ORIGINS or ["http://127.0.0.1", "http://localhost"]
+    allowed = _CSRF_ORIGINS or _DEFAULT_CSRF_ORIGINS
     for h in (origin, referer):
         if h:
             parsed = urlparse(h)

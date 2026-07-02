@@ -291,7 +291,7 @@ class ConfigLearner:
         data = {
             "#meta": {
                 "generated_by": f"netadmin learn {self.config['host']}",
-                "generated_at": datetime.datetime.now().isoformat(),
+                "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "source_device": self.config["host"],
             },
             "device": {

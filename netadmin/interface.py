@@ -79,19 +79,20 @@ class InterfaceInfo:
                         "speed": "",
                     })
         else:
-            # 思科 show interfaces status
+            # 思科 show interfaces status — 列: Port(0) Name(1) Status(2) Vlan(3) Duplex(4) Speed(5) Type(6)
+            # 注意: 没有 Protocol 列，Duplex 和 Speed 在第 4/5 列
             for line in lines:
                 parts = line.split()
-                if not parts or parts[0].startswith("-") or "Port" in line or "Name" in line:
+                if not parts or parts[0].startswith("-") or "Port" in line:
                     continue
                 if len(parts) >= 4:
                     rows.append({
                         "interface": parts[0],
-                        "status": parts[1].lower() if len(parts) > 1 else "unknown",
-                        "vlan": parts[2] if len(parts) > 2 else "",
-                        "protocol": parts[3].lower() if len(parts) > 3 else "",
-                        "description": "",
-                        "speed": "",
+                        "status": parts[2].lower() if len(parts) > 2 else "unknown",
+                        "vlan": parts[3] if len(parts) > 3 else "",
+                        "protocol": "up" if parts[2].lower() == "connected" else "down",
+                        "description": parts[1] if len(parts) > 1 and parts[1] != "--" else "",
+                        "speed": parts[5] if len(parts) > 5 else "",
                     })
 
         return rows
