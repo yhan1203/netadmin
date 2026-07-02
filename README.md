@@ -2,7 +2,7 @@
 
 **华为 & 思科统一交换机管理工具** | *Unified Huawei & Cisco Switch Manager*
 
-一个开箱即用的命令行网络设备管理工具。不是 Python 库，是运维可以直接用的瑞士军刀。
+一个开箱即用的网络设备管理工具。不是 Python 库，是运维可以直接用的瑞士军刀。
 
 ```bash
 pip install netadmin
@@ -16,8 +16,8 @@ netadmin backup run
 netadmin learn 10.0.1.1 -o template.yaml
 netadmin apply template.yaml -d 10.0.1.2
 
-# 审计合规
-netadmin audit --all
+# 一键巡检 + 告警推送
+netadmin check --all --notify
 ```
 
 ![Demo](https://img.shields.io/badge/demo-live-brightgreen)
@@ -53,6 +53,8 @@ netadmin audit --all
 | 配置备份 | `netadmin backup run` | 备份所有设备到本地 |
 | 配置对比 | `netadmin backup diff <id1> <id2>` | 两次备份的差异对比 |
 | 配置回滚 | `netadmin backup restore <id>` | 查看历史版本内容 |
+| 定时备份 | `netadmin backup schedule add -n daily -i daily` | crontab 驱动的自动备份 |
+| Web 仪表盘 | `netadmin web` | 浏览器查看设备状态和备份 |
 
 ### 🔥 照猫画虎（核心卖点）
 
@@ -95,11 +97,14 @@ netadmin apply template.yaml -d 10.0.1.2 --dry-run
 # 单台健康检查（CPU/内存/温度/日志错误）
 netadmin check 10.0.1.1
 
-# 全量巡检
-netadmin check --all
+# 全量巡检 + 异常告警推送
+netadmin check --all --notify
 
 # 安全合规审计（密码加密/SNMP/SSH/VTY/ACL/日志）
 netadmin audit 10.0.1.1
+
+# 审计 + 低分告警
+netadmin audit --all --notify
 ```
 
 | 审计项 | 检查内容 |
@@ -112,6 +117,55 @@ netadmin audit 10.0.1.1
 | VLAN 1 风险 | 端口是否直接使用默认 VLAN 1 |
 | 日志审计 | 日志是否开启 |
 | NTP 同步 | 是否配置了 NTP |
+
+### ⏰ 定时备份调度
+
+```bash
+# 每 30 分钟备份一次
+netadmin backup schedule add -n "高频备份" -i "30m"
+
+# 每天凌晨 2 点备份
+netadmin backup schedule add -n "每日备份" -i "daily"
+
+# 自定义 crontab
+netadmin backup schedule add -n "工作日9点" -i "0 9 * * 1-5"
+
+# 查看调度任务
+netadmin backup schedule list
+
+# 立即执行所有调度
+netadmin backup schedule run
+```
+
+### 🔔 告警通知
+
+在 `config.yaml` 中配置 Telegram Bot 或钉钉机器人后：
+
+```bash
+# 巡检异常自动推送到手机
+netadmin check --all --notify
+netadmin audit --all --notify
+```
+
+支持渠道：
+- **Telegram Bot** — 通过 BotFather 创建 bot，填入 token 和 chat_id
+- **钉钉自定义机器人** — 支持加签安全方式
+
+### 🌐 Web 仪表盘
+
+```bash
+# 启动 Web 界面（默认 http://0.0.0.0:8099）
+netadmin web
+
+# 指定端口
+netadmin web --port 8080 --host 127.0.0.1
+```
+
+功能：
+- 设备总览仪表盘（HTMX 实时刷新健康状态）
+- 设备详情页（健康检查 + 安全审计 + 备份历史）
+- 备份历史浏览（内容查看 + 差异对比）
+- 调度任务管理（添加/启用/禁用/删除/立即执行）
 
 ---
 
@@ -133,6 +187,9 @@ netadmin backup run
 
 # 一键巡检
 netadmin check --all
+
+# 启动 Web 仪表盘
+netadmin web
 ```
 
 支持通过环境变量传入密码，避免密码出现在命令行历史：
@@ -170,7 +227,12 @@ netadmin/
 │   ├── apply.py        # 画虎 — 配置部署
 │   ├── scanner.py      # 网段设备发现
 │   ├── checker.py      # 健康检查 + 安全审计
-│   └── config.py       # 配置加载
+│   ├── config.py       # 配置加载
+│   ├── scheduler.py    # 定时备份调度
+│   ├── notifier.py     # Telegram/钉钉告警
+│   └── web/
+│       ├── app.py      # FastAPI 仪表盘
+│       └── templates/  # Jinja2 模板
 ├── tests/
 ├── config.yaml         # 设备清单模板
 ├── pyproject.toml
@@ -184,7 +246,7 @@ netadmin/
 ```bash
 git clone https://github.com/yhan1203/netadmin.git
 cd netadmin
-pip install -e ".[dev]"
+pip install -e ".[dev,web]"
 pytest
 ```
 
@@ -200,4 +262,4 @@ MIT
 
 ---
 
-> **关键词：** 网络自动化 · 华为交换机管理 · 思科交换机管理 · 配置备份 · 配置克隆 · 安全审计 · 网络设备发现 · CLI 运维工具
+> **关键词：** 网络自动化 · 华为交换机管理 · 思科交换机管理 · 配置备份 · 配置克隆 · 安全审计 · 网络设备发现 · CLI 运维工具 · Web 仪表盘 · 定时备份 · 告警通知
