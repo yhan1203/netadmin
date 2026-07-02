@@ -9,6 +9,14 @@ from netadmin.commands import resolve
 from netadmin.connector import Connector, ConnectorError
 
 
+def _resolve_cmd(name: str, vendor: str) -> str:
+    """安全解析命令，确保返回 str 而非 list"""
+    cmd = resolve(name, vendor)
+    if isinstance(cmd, list):
+        return cmd[0]  # 取第一条命令
+    return cmd
+
+
 class HealthChecker:
     """设备健康检查"""
 
@@ -23,15 +31,15 @@ class HealthChecker:
         try:
             with Connector(config) as conn:
                 # CPU
-                cpu_output = conn.send_command(str(resolve("show_cpu", vendor)))
+                cpu_output = conn.send_command(_resolve_cmd("show_cpu", vendor))
                 report["cpu"] = self._parse_cpu(cpu_output, vendor)
 
                 # Memory
-                mem_output = conn.send_command(str(resolve("show_memory", vendor)))
+                mem_output = conn.send_command(_resolve_cmd("show_memory", vendor))
                 report["memory"] = self._parse_memory(mem_output, vendor)
 
                 # Version
-                ver_output = conn.send_command(str(resolve("show_version", vendor)))
+                ver_output = conn.send_command(_resolve_cmd("show_version", vendor))
                 report["version"] = self._parse_version_line(ver_output)
                 report["model"] = self._parse_model(ver_output, vendor)
                 report["uptime"] = self._parse_uptime(ver_output, vendor)
@@ -39,7 +47,7 @@ class HealthChecker:
                 # Temperature (华为)
                 if vendor == "huawei":
                     try:
-                        env_output = conn.send_command(str(resolve("show_environment", vendor)))
+                        env_output = conn.send_command(_resolve_cmd("show_environment", vendor))
                         report["temperature"] = self._parse_temperature(env_output, vendor)
                     except ConnectorError:
                         report["temperature"] = "N/A"
@@ -47,7 +55,7 @@ class HealthChecker:
                     report["temperature"] = "N/A"
 
                 # Log errors
-                log_output = conn.send_command(str(resolve("show_log", vendor)))
+                log_output = conn.send_command(_resolve_cmd("show_log", vendor))
                 report["log_errors"] = self._count_log_errors(log_output)
 
         except ConnectorError as e:
@@ -180,7 +188,7 @@ class SecurityAuditor:
 
         try:
             with Connector(config) as conn:
-                config_text = conn.send_command(str(resolve("show_running_config", vendor)))
+                config_text = conn.send_command(_resolve_cmd("show_running_config", vendor))
 
                 self._check_password_encryption(config_text, vendor)
                 self._check_snmp_community(config_text)
@@ -203,7 +211,7 @@ class SecurityAuditor:
     def _add_finding(self, check: str, passed: bool, detail: str = "") -> None:
         self._findings.append({"check": check, "passed": passed, "detail": detail})
         if not passed:
-            self._score -= 10
+            self._score = max(0, self._score - 10)
 
     def _check_password_encryption(self, config: str, vendor: str) -> None:
         if vendor == "huawei":
@@ -245,8 +253,7 @@ class SecurityAuditor:
             else:
                 self._add_finding("SSH Version", False, "SSH v1 configured — upgrade to v2")
         else:
-            # 没有明确 SSH 配置，默认为通过（保守判断）
-            self._add_finding("SSH Version", True, "SSH configured (assumed v2)")
+            self._add_finding("SSH Version", False, "No explicit SSH version config — configure SSH v2 for security")
 
     def _check_vty_acl(self, config: str, vendor: str) -> None:
         if vendor == "huawei":

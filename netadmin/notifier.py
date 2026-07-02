@@ -183,7 +183,6 @@ class AlertNotifier:
 
     def send_health_alert(self, report: dict, host: str) -> list[str]:
         """检查健康报告是否超标，超标则推送"""
-        alerts: list[str] = []
         checks: list[str] = []
 
         cpu = report.get("cpu", "")

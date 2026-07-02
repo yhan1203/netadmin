@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import base64
+import hmac
 import os
 import typing as t
 import urllib.parse
@@ -43,16 +44,18 @@ _WEB_PASS = os.environ.get("NETADMIN_WEB_PASS", "")
 
 
 def _check_auth(request: Request) -> bool:
-    """验证 Basic Auth"""
+    """验证 Basic Auth（常量时间比较）"""
     if not _WEB_USER and not _WEB_PASS:
         return True  # 未配置认证，放行
+    if not _WEB_USER or not _WEB_PASS:
+        return False  # 只配了一半，拒绝
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Basic "):
         return False
     try:
         decoded = base64.b64decode(auth[6:]).decode("utf-8")
         user, _, passwd = decoded.partition(":")
-        return user == _WEB_USER and passwd == _WEB_PASS
+        return hmac.compare_digest(user, _WEB_USER) and hmac.compare_digest(passwd, _WEB_PASS)
     except Exception:
         return False
 
@@ -327,7 +330,7 @@ def _escape_html(text: str) -> str:
 # ── CLI 入口 ─────────────────────────────────────────────────
 
 
-def run_web(host: str = "0.0.0.0", port: int = 8099, reload: bool = False) -> None:
+def run_web(host: str = "127.0.0.1", port: int = 8099, reload: bool = False) -> None:
     """启动 Web 服务器"""
     try:
         import uvicorn  # noqa: F811
@@ -336,6 +339,9 @@ def run_web(host: str = "0.0.0.0", port: int = 8099, reload: bool = False) -> No
             "uvicorn is required for the web dashboard. "
             "Install with: pip install netadmin[web]"
         )
+    if host == "0.0.0.0":
+        import logging as _lg
+        _lg.warning("Web dashboard listening on 0.0.0.0 — accessible to all network hosts. Set NETADMIN_WEB_USER and NETADMIN_WEB_PASS for authentication.")
     uvicorn.run("netadmin.web.app:app", host=host, port=port, reload=reload)
 
 

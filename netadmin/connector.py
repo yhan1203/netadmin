@@ -46,6 +46,17 @@ class ConnectorError(Exception):
         super().__init__(f"[{device}] {message}" + (f" (cmd: {command})" if command else ""))
 
 
+def _check_password(password: str, host: str) -> None:
+    """检查密码是否为空，空密码时输出明确提示"""
+    if not password:
+        raise ConnectorError(
+            "Password is empty. Set it in config.yaml or via NETADMIN_PASS_<HOST> environment variable.\n"
+            f"  config.yaml: devices[host={host}].password = \"...\"\n"
+            f"  env var:     export NETADMIN_PASS_{host.replace('.', '_')}=...",
+            device=host,
+        )
+
+
 # ── 连接器 ───────────────────────────────────────────────
 
 
@@ -58,6 +69,7 @@ class Connector:
 
     def connect(self) -> None:
         """建立 SSH 连接"""
+        _check_password(self.config.get("password", ""), self.config["host"])
         try:
             self._conn = ConnectHandler(
                 device_type=self.config["device_type"],
@@ -112,7 +124,8 @@ class Connector:
                     return vendor
         # 再试 login banner
         try:
-            output = self.send_command("display version" if "huawei" in str(self.config) else "show version")
+            vendor = self.config.get("vendor", "").lower()
+            output = self.send_command("display version" if vendor == "huawei" else "show version")
             if re.search(r"(?i)huawei|vrp", output):
                 return "huawei"
             if re.search(r"(?i)cisco|ios", output):
