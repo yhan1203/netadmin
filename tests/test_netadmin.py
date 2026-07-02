@@ -1028,5 +1028,156 @@ class TestBackupDB:
             mgr.close()
 
 
+# ═══════════════════════════════════════════════════════════════
+# scheduler
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestScheduler:
+    def test_parse_interval_minutes(self) -> None:
+        """30m → */30 * * * *"""
+        from netadmin.scheduler import parse_interval
+        assert parse_interval("30m") == "*/30 * * * *"
+
+    def test_parse_interval_hourly(self) -> None:
+        """1h → 0 */1 * * *"""
+        from netadmin.scheduler import parse_interval
+        assert parse_interval("1h") == "0 */1 * * *"
+
+    def test_parse_interval_daily(self) -> None:
+        """daily → 0 2 * * *"""
+        from netadmin.scheduler import parse_interval
+        assert parse_interval("daily") == "0 2 * * *"
+
+    def test_parse_interval_hourly_word(self) -> None:
+        """hourly → 0 * * * *"""
+        from netadmin.scheduler import parse_interval
+        assert parse_interval("hourly") == "0 * * * *"
+
+    def test_parse_interval_raw_crontab(self) -> None:
+        """原生 crontab 透传"""
+        from netadmin.scheduler import parse_interval
+        assert parse_interval("30 4 * * 1") == "30 4 * * 1"
+
+    def test_parse_interval_invalid(self) -> None:
+        """无效格式抛异常"""
+        from netadmin.scheduler import parse_interval
+        import pytest as _pytest
+        with _pytest.raises(ValueError):
+            parse_interval("garbage")
+
+    def test_schedule_list_empty(self) -> None:
+        """空数据库返回空列表"""
+        import tempfile
+        from netadmin.scheduler import BackupScheduler
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.db_path = str(__import__("pathlib").Path(tmp) / "sched.db")
+            sched = BackupScheduler(s)
+            try:
+                entries = sched.list_schedules()
+                assert entries == []
+            finally:
+                sched.close()
+
+    def test_schedule_add_and_list(self) -> None:
+        """添加后能列出"""
+        import tempfile
+        from netadmin.scheduler import BackupScheduler, parse_interval
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.db_path = str(__import__("pathlib").Path(tmp) / "sched.db")
+            sched = BackupScheduler(s)
+            try:
+                sid = sched.add("daily-backup", parse_interval("daily"), "每天凌晨备份")
+                assert sid > 0
+                entries = sched.list_schedules()
+                assert len(entries) == 1
+                assert entries[0].name == "daily-backup"
+                assert entries[0].enabled is True
+            finally:
+                sched.close()
+
+    def test_schedule_remove(self) -> None:
+        """删除后列表为空"""
+        import tempfile
+        from netadmin.scheduler import BackupScheduler, parse_interval
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.db_path = str(__import__("pathlib").Path(tmp) / "sched.db")
+            sched = BackupScheduler(s)
+            try:
+                sid = sched.add("test", parse_interval("30m"), "")
+                assert sched.remove(sid) is True
+                assert sched.list_schedules() == []
+                assert sched.remove(999) is False
+            finally:
+                sched.close()
+
+    def test_schedule_toggle(self) -> None:
+        """启用/禁用切换"""
+        import tempfile
+        from netadmin.scheduler import BackupScheduler, parse_interval
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.db_path = str(__import__("pathlib").Path(tmp) / "sched.db")
+            sched = BackupScheduler(s)
+            try:
+                sid = sched.add("test", parse_interval("30m"), "")
+                assert sched.toggle(sid, False) is True
+                entries = sched.list_schedules()
+                assert entries[0].enabled is False
+                assert sched.toggle(sid, True) is True
+                entries = sched.list_schedules()
+                assert entries[0].enabled is True
+                assert sched.toggle(999, True) is False
+            finally:
+                sched.close()
+
+    def test_schedule_run_no_devices(self) -> None:
+        """无设备时运行不崩溃，返回 error"""
+        import tempfile
+        from netadmin.scheduler import BackupScheduler, parse_interval
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.db_path = str(__import__("pathlib").Path(tmp) / "sched.db")
+            s.backup_dir = str(tmp)
+            s.devices = []  # 清空默认设备
+            sched = BackupScheduler(s)
+            try:
+                sched.add("test", parse_interval("30m"), "")
+                results = sched.run_scheduled_backups()
+                assert len(results) == 1
+                assert results[0]["success"] is False
+                assert "No devices configured" in results[0].get("error", "")
+            finally:
+                sched.close()
+
+    def test_crontab_describe(self) -> None:
+        """人类可读描述"""
+        from netadmin.scheduler import CrontabExpression
+
+        cases = [
+            ("*/5 * * * *", "每 5 分钟"),
+            ("0 2 * * *", "每天 2:00"),
+            ("30 * * * *", "每小时 30 分"),
+            ("0 9 * * 1", "每周一 9:00"),
+        ]
+        for raw, expected in cases:
+            parts = raw.split()
+            expr = CrontabExpression(*parts, raw=raw)
+            assert expr.describe() == expected
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

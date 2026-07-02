@@ -26,6 +26,7 @@ from netadmin.interface import InterfaceInfo
 from netadmin.vlan import VlanManager
 from netadmin.scanner import NetworkScanner
 from netadmin.checker import HealthChecker
+from netadmin.scheduler import BackupScheduler, CrontabExpression, parse_interval
 
 console = Console()
 settings = Settings()
@@ -326,6 +327,136 @@ def restore(id: int) -> None:
         console.print("[red]Backup record not found[/]")
         sys.exit(1)
     console.print(Syntax(content, "bash", theme="monokai", word_wrap=True))
+
+
+# ── backup schedule ──────────────────────────────────────────
+
+
+@backup.group()
+def schedule() -> None:
+    """定时备份调度管理"""
+
+
+@schedule.command()
+@click.option("--name", "-n", required=True, help="调度任务名称")
+@click.option("--interval", "-i", required=True, help="时间间隔: 30m, 1h, daily, hourly, 或 crontab 表达式 (如 '0 2 * * *')")
+@click.option("--desc", "-d", default="", help="描述")
+def add(name: str, interval: str, desc: str) -> None:
+    """添加定时备份任务"""
+    try:
+        crontab = parse_interval(interval)
+    except ValueError as e:
+        console.print(f"[red]✗ {e}[/]")
+        sys.exit(1)
+
+    sched = BackupScheduler(settings)
+    try:
+        expr = CrontabExpression(*crontab.split(), raw=crontab)
+        description = desc or expr.describe()
+        sched_id = sched.add(name, crontab, description)
+        console.print(f"[green]✓[/] Schedule added (ID: {sched_id}) — [bold]{name}[/]")
+        console.print(f"    Cron: {crontab} ({description})")
+    finally:
+        sched.close()
+
+
+@schedule.command(name="list")
+def schedule_list() -> None:
+    """查看所有定时备份任务"""
+    sched = BackupScheduler(settings)
+    try:
+        entries = sched.list_schedules()
+        if not entries:
+            console.print("[yellow]No schedules configured[/]")
+            console.print("  Use: [bold]netadmin backup schedule add --name NAME --interval INTERVAL[/]")
+            return
+
+        table = Table(title="Backup Schedules", box=box.ROUNDED)
+        table.add_column("ID", style="dim")
+        table.add_column("Name", style="cyan")
+        table.add_column("Crontab")
+        table.add_column("Description")
+        table.add_column("Enabled")
+        table.add_column("Last Run")
+        table.add_column("Result")
+
+        for e in entries:
+            enabled = "[green]✓[/]" if e.enabled else "[dim]✗[/]"
+            last_run = e.last_run or "[dim]never[/]"
+            result = e.last_result or ""
+            if result == "OK":
+                result = "[green]OK[/]"
+            elif result == "FAIL":
+                result = "[red]FAIL[/]"
+            table.add_row(str(e.id), e.name, e.crontab, e.description,
+                          enabled, last_run, result)
+        console.print(table)
+    finally:
+        sched.close()
+
+
+@schedule.command()
+@click.argument("schedule_id", type=int)
+def remove(schedule_id: int) -> None:
+    """删除定时备份任务"""
+    sched = BackupScheduler(settings)
+    try:
+        if sched.remove(schedule_id):
+            console.print(f"[green]✓[/] Schedule {schedule_id} removed")
+        else:
+            console.print(f"[red]✗[/] Schedule {schedule_id} not found")
+            sys.exit(1)
+    finally:
+        sched.close()
+
+
+@schedule.command()
+@click.argument("schedule_id", type=int)
+@click.argument("enabled", type=click.Choice(["true", "false"]))
+def toggle(schedule_id: int, enabled: str) -> None:
+    """启用/禁用定时备份任务"""
+    sched = BackupScheduler(settings)
+    try:
+        is_enabled = enabled == "true"
+        if sched.toggle(schedule_id, is_enabled):
+            status = "enabled" if is_enabled else "disabled"
+            console.print(f"[green]✓[/] Schedule {schedule_id} {status}")
+        else:
+            console.print(f"[red]✗[/] Schedule {schedule_id} not found")
+            sys.exit(1)
+    finally:
+        sched.close()
+
+
+@schedule.command()
+def run() -> None:
+    """立即执行所有定时备份任务"""
+    sched = BackupScheduler(settings)
+    try:
+        entries = sched.list_schedules()
+        enabled_entries = [e for e in entries if e.enabled]
+        if not enabled_entries:
+            console.print("[yellow]No enabled schedules to run[/]")
+            return
+
+        console.print(f"Running [bold]{len(enabled_entries)}[/] schedule(s)...\n")
+        results = sched.run_scheduled_backups()
+
+        for r in results:
+            status = "[green]OK[/]" if r["success"] else "[red]FAIL[/]"
+            console.print(f"  [{r['schedule_id']}] {r['name']} — {status}")
+            for dev in r.get("devices", []):
+                if dev.get("success"):
+                    console.print(f"       ✓ {dev['host']} → {dev['version']}")
+                else:
+                    console.print(f"       ✗ {dev['host']}: {dev.get('error', 'unknown')}")
+            if "error" in r:
+                console.print(f"       [yellow]⚠ {r['error']}[/]")
+
+        success_count = sum(1 for r in results if r["success"])
+        console.print(f"\n[bold]{'All schedules completed' if success_count == len(results) else f'{success_count}/{len(results)} schedules OK'}[/]")
+    finally:
+        sched.close()
 
 
 # ── learn (照猫) ─────────────────────────────────────────
