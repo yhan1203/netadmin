@@ -641,5 +641,197 @@ class TestCli:
         assert result.exit_code == 0
 
 
+# ═══════════════════════════════════════════════════════════════
+# apply — 额外边界测试
+# ═══════════════════════════════════════════════════════════════
+
+class TestApplyExtras:
+    def test_apply_cisco_trunk(self) -> None:
+        """验证思科 trunk 端口配置"""
+        from netadmin.apply import ConfigApplier
+        applier = ConfigApplier()
+        template = {
+            "device": {"hostname": "SW-TEST", "vendor": "cisco"},
+            "vlans": [],
+            "interfaces": [
+                {"name": "Gi1/0/1", "mode": "trunk", "vlans": "10,20,30", "description": "Uplink", "shutdown": False},
+                {"name": "Gi1/0/2", "mode": "access", "vlans": "10", "description": "Desktop", "shutdown": False},
+            ],
+        }
+        cfg = {"host": "10.0.0.5", "vendor": "cisco", "name": "SW-TEST",
+               "device_type": "cisco_ios", "port": 22, "username": "admin", "password": "", "timeout": 30}
+        cmds = applier._build_config_commands(template, cfg)
+        assert "switchport mode trunk" in cmds
+        assert "switchport trunk allowed vlan 10,20,30" in cmds
+        assert "switchport access vlan 10" in cmds
+        assert "switchport mode access" in cmds
+
+    def test_apply_huawei_hybrid(self) -> None:
+        """验证华为 hybrid 端口"""
+        from netadmin.apply import ConfigApplier
+        applier = ConfigApplier()
+        template = {
+            "device": {"hostname": "SW-TEST", "vendor": "huawei"},
+            "vlans": [],
+            "interfaces": [
+                {"name": "GE0/0/1", "mode": "hybrid", "vlans": "", "description": "", "shutdown": False},
+                {"name": "GE0/0/2", "mode": "access", "vlans": "99", "description": "MGMT", "shutdown": True},
+            ],
+        }
+        cfg = {"host": "10.0.0.6", "vendor": "huawei", "name": "SW-TEST",
+               "device_type": "huawei", "port": 22, "username": "admin", "password": "", "timeout": 30}
+        cmds = applier._build_config_commands(template, cfg)
+        assert "port link-type hybrid" in cmds
+        assert "shutdown" in cmds
+        assert "undo shutdown" in cmds  # 未 shutdown 的端口要 undo
+
+    def test_apply_with_stp_management(self) -> None:
+        """验证 STP + 管理配置"""
+        from netadmin.apply import ConfigApplier
+        applier = ConfigApplier()
+        template = {
+            "device": {"hostname": "SW-TEST", "vendor": "cisco"},
+            "vlans": [],
+            "interfaces": [],
+            "stp": {"mode": "rapid-pvst", "root_primary": False},
+            "management": {"ssh": True, "users": [], "mgmt_ip": ""},
+            "snmp": {"community": ["public"], "location": "", "contact": ""},
+        }
+        cfg = {"host": "10.0.0.7", "vendor": "cisco", "name": "SW-TEST",
+               "device_type": "cisco_ios", "port": 22, "username": "admin", "password": "", "timeout": 30}
+        cmds = applier._build_config_commands(template, cfg)
+        # STP 模式
+        assert "spanning-tree mode" in " ".join(cmds)
+        # SNMP
+        assert "snmp-server community public RO" in cmds
+
+
+# ═══════════════════════════════════════════════════════════════
+# checker — 额外审计测试
+# ═══════════════════════════════════════════════════════════════
+
+class TestAuditExtras:
+    def test_audit_findings_comprehensive(self) -> None:
+        """完整审计检查"""
+        from netadmin.checker import SecurityAuditor
+        auditor = SecurityAuditor()
+
+        # 全 PASS 的配置
+        good_config = """
+service password-encryption
+enable secret 5 $1$abc
+snmp-server community mysnmp RO
+ip ssh version 2
+line vty 0 4
+ access-class 10 in
+!
+banner motd ^C
+Welcome^C
+!
+ntp server 192.168.1.100
+logging buffered 16384
+"""
+        auditor._check_password_encryption(good_config, "cisco")
+        auditor._check_snmp_community(good_config)
+        auditor._check_ssh_version(good_config)
+        auditor._check_vty_acl(good_config, "cisco")
+        auditor._check_banner(good_config)
+        auditor._check_logging(good_config)
+        auditor._check_ntp(good_config, "cisco")
+
+        passed = sum(1 for f in auditor._findings if f["passed"])
+        assert passed >= 6  # 大部分检查通过
+
+    def test_audit_huawei(self) -> None:
+        """华为配置审计"""
+        from netadmin.checker import SecurityAuditor
+        auditor = SecurityAuditor()
+
+        huawei_config = """
+password cipher
+snmp-agent community read monitoring
+stelnet server enable
+acl number 2000
+ rule 5 permit source 10.0.0.0 0.0.0.255
+#
+user-interface vty 0 4
+ acl 2000 inbound
+#
+header shell information ^C
+Welcome^C
+#
+ntp server ntp.example.com
+info-center logbuffer
+"""
+        auditor._check_password_encryption(huawei_config, "huawei")
+        auditor._check_snmp_community(huawei_config)
+        auditor._check_ssh_version(huawei_config)
+        auditor._check_vty_acl(huawei_config, "huawei")
+        auditor._check_banner(huawei_config)
+        auditor._check_logging(huawei_config)
+        auditor._check_ntp(huawei_config, "huawei")
+
+        passed = sum(1 for f in auditor._findings if f["passed"])
+        assert passed >= 5
+
+
+# ═══════════════════════════════════════════════════════════════
+# connector — 厂商检测逻辑
+# ═══════════════════════════════════════════════════════════════
+
+class TestConnectorDetect:
+    def test_normalize_vendor(self) -> None:
+        from netadmin.connector import normalize_vendor
+        assert normalize_vendor("华为") == "huawei"
+        assert normalize_vendor("思科") == "cisco"
+        assert normalize_vendor("HUAWEI") == "huawei"
+        assert normalize_vendor("CISCO") == "cisco"
+        assert normalize_vendor("huawei") == "huawei"
+        assert normalize_vendor("cisco") == "cisco"
+
+    def test_detect_vendor_from_short(self) -> None:
+        from netadmin.connector import detect_vendor_from_short
+        assert detect_vendor_from_short("huawei") == "huawei"
+        assert detect_vendor_from_short("cisco_ios") == "cisco"
+        assert detect_vendor_from_short("cisco_xe") == "cisco"
+        assert detect_vendor_from_short("unknown") == "cisco"  # fallback
+
+
+# ═══════════════════════════════════════════════════════════════
+# backup — SQLite 操作
+# ═══════════════════════════════════════════════════════════════
+
+class TestBackupDB:
+    def test_backup_list_empty(self) -> None:
+        """空数据库不报错"""
+        import tempfile
+        from netadmin.backup import BackupManager
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.backup_dir = str(tmp)
+            s.db_path = str(__import__("pathlib").Path(tmp) / "test.db")
+            mgr = BackupManager(s)
+            records = mgr.list_backups()
+            assert records == []
+            mgr.close()
+
+    def test_backup_diff_nonexistent(self) -> None:
+        """不存在的备份 ID 返回 None"""
+        import tempfile
+        from netadmin.backup import BackupManager
+        from netadmin.config import Settings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Settings()
+            s.backup_dir = str(tmp)
+            s.db_path = str(__import__("pathlib").Path(tmp) / "test.db")
+            mgr = BackupManager(s)
+            result = mgr.diff_backups(999, 998)
+            assert result is None
+            mgr.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

@@ -1,0 +1,52 @@
+name: Bug Report
+description: 提交 Bug 以帮助改进 netadmin
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 感谢提交 Bug！
+        请尽量详细描述，方便我们定位问题。
+
+  - type: input
+    id: command
+    attributes:
+      label: 执行的命令
+      description: 你运行了什么命令？
+      placeholder: "netadmin connect 10.0.0.1"
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 期望行为 vs 实际行为
+      description: 你期望发生什么？实际发生了什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 错误输出
+      description: 粘贴终端输出的错误信息
+      render: bash
+
+  - type: input
+    id: version
+    attributes:
+      label: netadmin 版本
+      description: 运行 `netadmin --version`
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号
+      description: "如：华为 S5735 / 思科 C2960X"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息
+      description: 配置截图、配置文件等

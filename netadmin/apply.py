@@ -204,7 +204,9 @@ class ConfigApplier:
                     if stp.get("root_primary"):
                         commands.append("stp root primary")
                 else:
-                    if mode in ("mstp", "rstp", "pvst"):
+                    if mode in ("mstp", "rstp", "pvst", "rapid-pvst"):
+                        commands.append(f"spanning-tree mode {mode}")
+                    else:
                         commands.append(f"spanning-tree mode {mode}")
                     if stp.get("root_primary"):
                         commands.append("spanning-tree vlan 1 root primary")
