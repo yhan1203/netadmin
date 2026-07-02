@@ -27,6 +27,7 @@ from netadmin.vlan import VlanManager
 from netadmin.scanner import NetworkScanner
 from netadmin.checker import HealthChecker
 from netadmin.scheduler import BackupScheduler, CrontabExpression, parse_interval
+from netadmin.notifier import AlertNotifier
 
 console = Console()
 settings = Settings()
@@ -574,9 +575,11 @@ def scan(subnet: str, timeout: int, threads: int) -> None:
 @click.option("--username", "-u", help="用户名")
 @click.option("--password", "-p", help="密码")
 @click.option("--all", "check_all", is_flag=True, help="检查所有设备")
-def check(host: str | None, username: str | None, password: str | None, check_all: bool) -> None:
+@click.option("--notify", "-n", is_flag=True, help="发现异常时推送通知（需配置 config.yaml notifications）")
+def check(host: str | None, username: str | None, password: str | None, check_all: bool, notify: bool) -> None:
     """设备健康检查（CPU/内存/温度/日志错误）"""
     checker = HealthChecker()
+    notifier = AlertNotifier(settings.notifications) if notify else None
 
     if check_all or not host:
         targets = _resolve_devices(())
@@ -585,12 +588,15 @@ def check(host: str | None, username: str | None, password: str | None, check_al
     else:
         targets = _resolve_devices(())
 
+    any_issue = False
+
     for dev in targets:
         with console.status(f"Checking {dev['host']}..."):
             report = checker.check(dev)
 
         if "error" in report:
             console.print(f"[red]✗ {dev['host']}: {report['error']}[/]")
+            any_issue = True
             continue
 
         p = Panel.fit(
@@ -605,6 +611,15 @@ def check(host: str | None, username: str | None, password: str | None, check_al
         )
         console.print(p)
 
+        # 推送通知
+        if notifier:
+            sent = notifier.send_health_alert(report, dev["host"])
+            if sent:
+                console.print(f"  [dim]🔔 Alert sent via {', '.join(sent)}[/]")
+
+    if notify and not notifier.is_configured():
+        console.print("[yellow]⚠ --notify specified but no notification channels configured in config.yaml[/]")
+
 
 # ── audit ────────────────────────────────────────────────
 
@@ -614,11 +629,13 @@ def check(host: str | None, username: str | None, password: str | None, check_al
 @click.option("--username", "-u", help="用户名")
 @click.option("--password", "-p", help="密码")
 @click.option("--all", "audit_all", is_flag=True, help="审计所有设备")
-def audit(host: str | None, username: str | None, password: str | None, audit_all: bool) -> None:
+@click.option("--notify", "-n", is_flag=True, help="发现风险时推送通知（需配置 config.yaml notifications）")
+def audit(host: str | None, username: str | None, password: str | None, audit_all: bool, notify: bool) -> None:
     """安全合规审计"""
     from netadmin.checker import SecurityAuditor
 
     auditor = SecurityAuditor()
+    notifier = AlertNotifier(settings.notifications) if notify else None
 
     if audit_all or not host:
         targets = _resolve_devices(())
@@ -650,6 +667,15 @@ def audit(host: str | None, username: str | None, password: str | None, audit_al
             findings_table.add_row(finding["check"], status_icon, finding.get("detail", ""))
         console.print(findings_table)
 
+        # 推送通知
+        if notifier:
+            sent = notifier.send_audit_alert(report, dev["host"])
+            if sent:
+                console.print(f"  [dim]🔔 Alert sent via {', '.join(sent)}[/]")
+
+    if notify and not notifier.is_configured():
+        console.print("[yellow]⚠ --notify specified but no notification channels configured in config.yaml[/]")
+
 
 # ── 辅助 ─────────────────────────────────────────────────
 
@@ -675,6 +701,21 @@ def _resolve_devices(hosts: tuple[str, ...] | None = None,
             if password:
                 d["password"] = password
     return devices
+
+
+# ── web ──────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--host", default="0.0.0.0", help="监听地址")
+@click.option("--port", "-p", default=8099, type=int, help="监听端口")
+@click.option("--reload", is_flag=True, help="热重载（开发用）")
+def web(host: str, port: int, reload: bool) -> None:
+    """启动 Web 仪表盘 (FastAPI + HTMX)"""
+    console.print(f"[bold green]✓[/] Starting web dashboard at [underline]http://{host}:{port}[/]")
+    console.print("[dim]Press Ctrl+C to stop[/]")
+    from netadmin.web.app import run_web
+    run_web(host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

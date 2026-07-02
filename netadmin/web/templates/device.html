@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+    <h2>{{ host }}</h2>
+    <p>设备详情 · <span class="status status-ok"><span class="dot dot-ok"></span>{{ device.get("vendor", "unknown") }}</span></p>
+</div>
+
+<div class="card-grid">
+    <!-- 健康检查 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>🩺 健康状态</h3>
+            {% if "error" in health %}
+            <span class="status status-err">连接失败</span>
+            {% else %}
+            <span class="status status-ok">正常</span>
+            {% endif %}
+        </div>
+        {% if "error" in health %}
+        <div class="error" style="margin-top: 8px;">✗ {{ health.error[:120] }}</div>
+        {% else %}
+        <div class="metric">
+            <span class="metric-label">🖥 CPU</span>
+            <span class="metric-value">{{ health.get("cpu", "N/A") }}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">🧠 内存</span>
+            <span class="metric-value">{{ health.get("memory", "N/A") }}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">🌡 温度</span>
+            <span class="metric-value">{{ health.get("temperature", "N/A") }}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">⏱ 运行时间</span>
+            <span class="metric-value">{{ health.get("uptime", "N/A") }}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">📝 日志错误</span>
+            <span class="metric-value">{{ health.get("log_errors", "N/A") }}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">📟 型号</span>
+            <span class="metric-value">{{ health.get("model", "N/A") }}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">📦 版本</span>
+            <span class="metric-value">{{ health.get("version", "N/A")[:50] }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 安全审计 -->
+    <div class="card">
+        <div class="card-header">
+            <h3>🔒 安全审计</h3>
+            {% if "error" in audit %}
+            <span class="status status-err">失败</span>
+            {% else %}
+            {% set score = audit.get("score", 0) %}
+            <span class="status {% if score >= 80 %}status-ok{% elif score >= 60 %}status-warn{% else %}status-err{% endif %}">
+                {{ score }}/100
+            </span>
+            {% endif %}
+        </div>
+        {% if "error" not in audit %}
+        {% for f in audit.get("findings", []) %}
+        <div class="metric">
+            <span class="metric-label">{{ f.check }}</span>
+            <span class="metric-value">
+                {% if f.passed %}
+                <span style="color: var(--green);">✓ PASS</span>
+                {% else %}
+                <span style="color: var(--red);">✗ FAIL</span>
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="error">✗ {{ audit.error[:120] }}</div>
+        {% endif %}
+    </div>
+
+    <!-- 备份历史 -->
+    <div class="card" style="grid-column: 1 / -1;">
+        <div class="card-header">
+            <h3>💾 备份历史</h3>
+            <a href="/backups" class="btn btn-sm">查看全部</a>
+        </div>
+        {% if backups %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>版本</th>
+                        <th>时间</th>
+                        <th>大小</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in backups[:10] %}
+                    <tr class="clickable-row" onclick="toggleBackup({{ b.id }})">
+                        <td>{{ b.id }}</td>
+                        <td>{{ b.version }}</td>
+                        <td>{{ b.timestamp }}</td>
+                        <td>{{ b.size }}</td>
+                        <td>{{ b.get("comment", "") }}</td>
+                    </tr>
+                    <tr id="backup-{{ b.id }}" style="display: none;">
+                        <td colspan="5">
+                            <div id="backup-content-{{ b.id }}">
+                                <span class="loading-text"><span class="spinner"></span> 加载中...</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-dim); padding: 12px 0;">暂无备份记录</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function toggleBackup(id) {
+    const row = document.getElementById('backup-' + id);
+    const content = document.getElementById('backup-content-' + id);
+    if (row.style.display === 'none') {
+        row.style.display = 'table-row';
+        if (content.innerHTML.includes('加载中')) {
+            fetch('/backups/' + id)
+                .then(r => r.text())
+                .then(html => { content.innerHTML = html; });
+        }
+    } else {
+        row.style.display = 'none';
+    }
+}
+</script>
+
+{% endblock %}

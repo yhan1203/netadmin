@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+    <h2>设备总览</h2>
+    <p>共 {{ total }} 台设备 · <a href="/health" hx-get="/health" hx-target="#health-grid" hx-indicator="#loading">刷新健康状态</a></p>
+</div>
+
+{% if total == 0 %}
+<div class="card" style="text-align:center; padding: 48px;">
+    <p style="color: var(--text-dim); margin-bottom: 16px;">暂无已配置的设备</p>
+    <p style="font-size: 0.9rem; color: var(--text-secondary);">请在 <code>config.yaml</code> 中配置设备后重启</p>
+</div>
+{% else %}
+
+<div id="health-grid" class="card-grid">
+    {% for dev in devices %}
+    <a href="/device/{{ dev.host | url_path }}" style="text-decoration: none; color: inherit;">
+        <div class="card">
+            <div class="card-header">
+                <h3>{{ dev.get("name", dev.host) }}</h3>
+                <span class="status status-ok">
+                    <span class="dot dot-ok"></span>{{ dev.get("vendor", "unknown") }}
+                </span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">📟 IP</span>
+                <span class="metric-value">{{ dev.host }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">🔌 端口</span>
+                <span class="metric-value">{{ dev.get("port", 22) }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">📋 设备类型</span>
+                <span class="metric-value">{{ dev.get("device_type", "—") }}</span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+<div id="loading" class="loading-text" style="display: none;">
+    <span class="spinner"></span> 正在检测设备健康状态...
+</div>
+{% endif %}
+
+{% endblock %}

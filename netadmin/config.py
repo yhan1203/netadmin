@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import typing as t
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -18,6 +19,33 @@ class DeviceConfig(t.TypedDict, total=False):
     username: str
     password: str
     timeout: int
+    notify: dict  # per-device notification overrides
+
+
+# ── 通知配置 ──────────────────────────────────────────────────
+
+
+@t.final
+@dataclass
+class NotificationConfig:
+    """通知渠道配置"""
+    telegram_token: str = ""
+    telegram_chat_id: str = ""
+    dingtalk_webhook: str = ""
+    dingtalk_secret: str = ""
+    enabled: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> NotificationConfig:
+        if not data:
+            return cls()
+        return cls(
+            telegram_token=data.get("telegram_token", ""),
+            telegram_chat_id=data.get("telegram_chat_id", ""),
+            dingtalk_webhook=data.get("dingtalk_webhook", ""),
+            dingtalk_secret=data.get("dingtalk_secret", ""),
+            enabled=data.get("enabled", False) or bool(data.get("telegram_token") or data.get("dingtalk_webhook")),
+        )
 
 
 class Settings:
@@ -34,6 +62,7 @@ class Settings:
         self.default_timeout: int = defaults.get("timeout", 30)
         self.backup_dir: str = raw.get("backup_dir", "./backups")
         self.db_path: str = raw.get("db_path", "./netadmin.db")
+        self.notifications: NotificationConfig = NotificationConfig.from_dict(raw.get("notifications", {}))
         self._config_path: str = str(path) if path else ""
 
         # 环境变量覆盖密码（安全）

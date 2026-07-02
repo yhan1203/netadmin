@@ -3,8 +3,6 @@
 > 任务跟踪。完成一条标记一条。
 
 ## 待办
-- [ ] 加 Telegram/钉钉告警（巡检异常推送）
-- [ ] 写 Web 仪表盘（FastAPI + HTMX，第二阶段）
 - [ ] 连接真实设备验证命令兼容性
 
 ## 已完成
@@ -22,3 +20,5 @@
 - [x] GitHub 商品化建设（话题标签/Issue模板/PR模板/Release v0.1.0） — 2026-07-02
 - [x] 产品体验打磨（测试 68个/覆盖54%/demo脚本） — 2026-07-02
 - [x] 定时备份调度（scheduler 模块 + CLI 5 个子命令 + 12 个测试） — 2026-07-02
+- [x] Telegram/钉钉告警（notifier 模块 + config.yaml 集成 + check/audit --notify + 8 个测试） — 2026-07-02
+- [x] Web 仪表盘（FastAPI + HTMX + 4 页面 + 6 个测试） — 2026-07-02

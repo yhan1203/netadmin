@@ -1,0 +1,39 @@
+<div id="health-grid" class="card-grid" hx-swap-oob="true">
+    {% for card in cards %}
+    <a href="/device/{{ card.host | url_path }}" style="text-decoration: none; color: inherit;">
+        <div class="card">
+            <div class="card-header">
+                <h3>{{ card.name }}</h3>
+                <span class="status {% if card.error %}status-err{% else %}status-ok{% endif %}">
+                    <span class="dot {% if card.error %}dot-err{% else %}dot-ok{% endif %}"></span>
+                    {{ card.vendor }}
+                </span>
+            </div>
+            {% if card.error %}
+            <div class="error" style="margin-top: 8px;">✗ {{ card.error[:80] }}</div>
+            {% else %}
+            <div class="metric">
+                <span class="metric-label">🖥 CPU</span>
+                <span class="metric-value">{{ card.cpu.replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">🧠 内存</span>
+                <span class="metric-value">{{ card.memory.replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">🌡 温度</span>
+                <span class="metric-value">{{ card.temperature.replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">⏱ 运行时间</span>
+                <span class="metric-value">{{ card.uptime[:40] }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">📝 日志错误</span>
+                <span class="metric-value">{{ card.log_errors }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>

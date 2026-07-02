@@ -32,3 +32,18 @@ backup_dir: ./backups
 
 # 数据库路径
 db_path: ./netadmin.db
+
+# ── 通知告警 ─────────────────────────────────────────────────
+# 配置后，netadmin check --notify 和 netadmin audit --notify
+# 会在发现异常时自动推送到指定渠道
+
+notifications:
+  enabled: true                       # 总开关
+
+  # Telegram Bot（推荐）
+  telegram_token: ""                  # BotFather 获取的 token
+  telegram_chat_id: ""                # 目标聊天/群组 ID
+
+  # 钉钉自定义机器人
+  dingtalk_webhook: ""                # Webhook 地址
+  dingtalk_secret: ""                 # 加签密钥（如果设置了安全方式）

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+    <h2>备份历史</h2>
+    <p>所有设备的配置备份记录</p>
+</div>
+
+{% if backups %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>设备</th>
+                <th>版本</th>
+                <th>时间</th>
+                <th>大小</th>
+                <th>备注</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in backups %}
+            <tr>
+                <td>{{ b.id }}</td>
+                <td>{{ b.device }}</td>
+                <td>{{ b.version }}</td>
+                <td>{{ b.timestamp }}</td>
+                <td>{{ b.size }}</td>
+                <td>{{ b.get("comment", "") }}</td>
+                <td>
+                    <button class="btn btn-sm" onclick="showContent({{ b.id }})">查看</button>
+                    {% if loop.index0 + 1 < loop.length %}
+                    <button class="btn btn-sm" onclick="showDiff({{ b.id }}, {{ backups[loop.index0 + 1].id }})">对比</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="content-viewer" style="margin-top: 20px; display: none;">
+    <div class="section-title">内容 <button class="btn btn-sm" onclick="closeViewer()">关闭</button></div>
+    <div id="content-area"></div>
+</div>
+
+<script>
+function showContent(id) {
+    const viewer = document.getElementById('content-viewer');
+    const area = document.getElementById('content-area');
+    viewer.style.display = 'block';
+    area.innerHTML = '<span class="loading-text"><span class="spinner"></span> 加载中...</span>';
+    fetch('/backups/' + id)
+        .then(r => r.text())
+        .then(html => { area.innerHTML = html; });
+}
+function showDiff(a, b) {
+    const viewer = document.getElementById('content-viewer');
+    const area = document.getElementById('content-area');
+    viewer.style.display = 'block';
+    area.innerHTML = '<span class="loading-text"><span class="spinner"></span> 加载差异...</span>';
+    fetch('/backups/diff/' + a + '/' + b)
+        .then(r => r.text())
+        .then(html => { area.innerHTML = html; });
+}
+function closeViewer() {
+    document.getElementById('content-viewer').style.display = 'none';
+}
+</script>
+{% else %}
+<div class="card" style="text-align:center; padding: 48px;">
+    <p style="color: var(--text-dim);">暂无备份记录</p>
+    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">运行 <code>netadmin backup run</code> 开始备份</p>
+</div>
+{% endif %}
+
+{% endblock %}

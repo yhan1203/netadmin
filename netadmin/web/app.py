@@ -1,0 +1,254 @@
+"""netadmin Web 仪表盘 — FastAPI + Jinja2 + HTMX
+
+使用:
+    netadmin web                          # 默认 0.0.0.0:8099
+    netadmin web --host 127.0.0.1 --port 8080
+
+依赖:
+    pip install fastapi uvicorn jinja2 httpx
+    或 pip install -e ".[web]"
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from netadmin.backup import BackupManager
+from netadmin.checker import HealthChecker, SecurityAuditor
+from netadmin.config import Settings
+from netadmin.scheduler import BackupScheduler
+
+settings = Settings()
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
+
+app = FastAPI(title="netadmin Dashboard", version="0.1.0")
+
+# 手动创建 Jinja2 环境（绕过 Starlette Jinja2Templates 与 Jinja2 3.1.6 的兼容问题）
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(TEMPLATE_DIR)),
+    autoescape=select_autoescape(["html", "xml"]),
+)
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+def _render(name: str, request: Request, **context: object) -> HTMLResponse:
+    """渲染模板"""
+    template = _jinja_env.get_template(name)
+    html = template.render(request=request, **context)
+    return HTMLResponse(html)
+
+
+# ── Jinja2 自定义过滤器 ──────────────────────────────────────
+
+
+def _url_path_escape(s: str) -> str:
+    """URL 路径转义（用于设备 host 中的点号等）"""
+    from urllib.parse import quote
+    return quote(s, safe="")
+
+
+_jinja_env.filters["url_path"] = _url_path_escape
+
+
+# ── 全局上下文 ───────────────────────────────────────────────
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard(request: Request) -> HTMLResponse:
+    """仪表盘首页 — 设备总览"""
+    devices = settings.all_devices()
+    return _render("dashboard.html", request, devices=devices, total=len(devices))
+
+
+@app.get("/device/{host:path}", response_class=HTMLResponse)
+async def device_detail(host: str, request: Request) -> HTMLResponse:
+    """单设备详情页"""
+    host = urllib.parse.unquote(host)
+    cfg = settings.resolve_device(host)
+
+    # 健康检查
+    checker = HealthChecker()
+    health = checker.check(cfg)
+
+    # 安全审计
+    auditor = SecurityAuditor()
+    audit = auditor.audit(cfg)
+
+    # 备份历史
+    mgr = BackupManager(settings)
+    try:
+        backups = mgr.list_backups(host)
+    finally:
+        mgr.close()
+
+    return _render(
+        "device.html", request,
+        host=host, device=cfg, health=health, audit=audit, backups=backups,
+    )
+
+
+@app.get("/backups", response_class=HTMLResponse)
+async def backup_list(request: Request) -> HTMLResponse:
+    """备份历史"""
+    mgr = BackupManager(settings)
+    try:
+        records = mgr.list_backups()
+    finally:
+        mgr.close()
+    return _render("backups.html", request, backups=records)
+
+
+@app.get("/backups/{backup_id}", response_class=HTMLResponse)
+async def backup_content(backup_id: int, request: Request) -> HTMLResponse:
+    """备份内容查看"""
+    mgr = BackupManager(settings)
+    try:
+        content = mgr.get_backup_content(backup_id)
+    finally:
+        mgr.close()
+    if content is None:
+        return HTMLResponse("<div class='error'>Backup not found</div>", status_code=404)
+    return HTMLResponse(f"<pre class='config-content'>{_escape_html(content)}</pre>")
+
+
+@app.get("/backups/diff/{a}/{b}", response_class=HTMLResponse)
+async def backup_diff(a: int, b: int, request: Request) -> HTMLResponse:
+    """备份差异对比"""
+    mgr = BackupManager(settings)
+    try:
+        diff_text = mgr.diff_backups(a, b)
+    finally:
+        mgr.close()
+    if diff_text is None:
+        return HTMLResponse("<div class='error'>Backup records not found</div>", status_code=404)
+    if not diff_text:
+        return HTMLResponse("<div class='info'>No differences</div>")
+    return HTMLResponse(f"<pre class='diff-content'>{_escape_html(diff_text)}</pre>")
+
+
+@app.get("/schedules", response_class=HTMLResponse)
+async def schedule_list(request: Request) -> HTMLResponse:
+    """调度任务管理"""
+    sched = BackupScheduler(settings)
+    try:
+        entries = sched.list_schedules()
+    finally:
+        sched.close()
+    return _render("schedules.html", request, schedules=entries)
+
+
+@app.post("/schedules/add")
+async def schedule_add(request: Request) -> HTMLResponse:
+    """添加调度（HTMX 表单提交）"""
+    form = await request.form()
+    name = form.get("name", "").strip()
+    interval = form.get("interval", "").strip()
+    if not name or not interval:
+        return HTMLResponse("<div class='error'>Name and interval required</div>", status_code=400)
+
+    try:
+        from netadmin.scheduler import CrontabExpression, parse_interval
+        crontab = parse_interval(interval)
+    except ValueError as e:
+        return HTMLResponse(f"<div class='error'>{_escape_html(str(e))}</div>", status_code=400)
+
+    sched = BackupScheduler(settings)
+    try:
+        expr = CrontabExpression(*crontab.split(), raw=crontab)
+        sched.add(name, crontab, expr.describe())
+    finally:
+        sched.close()
+
+    return RedirectResponse(url="/schedules", status_code=303)
+
+
+@app.post("/schedules/{schedule_id}/toggle")
+async def schedule_toggle(schedule_id: int) -> HTMLResponse:
+    """启用/禁用调度（HTMX）"""
+    sched = BackupScheduler(settings)
+    try:
+        entries = sched.list_schedules()
+        entry = next((e for e in entries if e.id == schedule_id), None)
+        if entry is None:
+            return HTMLResponse("<div class='error'>Not found</div>", status_code=404)
+        sched.toggle(schedule_id, not entry.enabled)
+    finally:
+        sched.close()
+    return RedirectResponse(url="/schedules", status_code=303)
+
+
+@app.post("/schedules/{schedule_id}/delete")
+async def schedule_delete(schedule_id: int) -> HTMLResponse:
+    """删除调度（HTMX）"""
+    sched = BackupScheduler(settings)
+    try:
+        sched.remove(schedule_id)
+    finally:
+        sched.close()
+    return RedirectResponse(url="/schedules", status_code=303)
+
+
+@app.post("/schedules/run")
+async def schedule_run() -> HTMLResponse:
+    """立即执行所有调度（HTMX）"""
+    sched = BackupScheduler(settings)
+    try:
+        results = sched.run_scheduled_backups()
+    finally:
+        sched.close()
+    return RedirectResponse(url="/schedules", status_code=303)
+
+
+@app.get("/health", response_class=HTMLResponse)
+async def health_htmx(request: Request) -> HTMLResponse:
+    """HTMX 端 — 返回设备健康卡片"""
+    devices = settings.all_devices()
+    checker = HealthChecker()
+    cards: list[dict] = []
+    for dev in devices:
+        report = checker.check(dev)
+        cards.append({
+            "host": dev["host"],
+            "name": dev.get("name", dev["host"]),
+            "vendor": dev.get("vendor", ""),
+            "error": report.get("error"),
+            "cpu": report.get("cpu", "N/A"),
+            "memory": report.get("memory", "N/A"),
+            "temperature": report.get("temperature", "N/A"),
+            "uptime": report.get("uptime", "N/A"),
+            "log_errors": report.get("log_errors", "N/A"),
+        })
+    return _render("_health_cards.html", request, cards=cards)
+
+
+# ── 辅助 ─────────────────────────────────────────────────────
+
+
+def _escape_html(text: str) -> str:
+    """HTML 转义"""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+# ── CLI 入口 ─────────────────────────────────────────────────
+
+
+def run_web(host: str = "0.0.0.0", port: int = 8099, reload: bool = False) -> None:
+    """启动 Web 服务器"""
+    import uvicorn
+    uvicorn.run("netadmin.web.app:app", host=host, port=port, reload=reload)
+
+
+if __name__ == "__main__":
+    run_web()

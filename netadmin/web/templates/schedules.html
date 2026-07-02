@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+    <h2>调度管理</h2>
+    <p>定时备份的 crontab 任务</p>
+</div>
+
+<!-- 添加新调度 -->
+<div class="card" style="margin-bottom: 20px;">
+    <div class="card-header">
+        <h3>➕ 新建调度</h3>
+    </div>
+    <form action="/schedules/add" method="POST" hx-post="/schedules/add" hx-target="body" hx-swap="innerHTML" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 160px;">
+            <label>任务名称</label>
+            <input type="text" name="name" placeholder="如: 每日备份" required>
+        </div>
+        <div class="form-group" style="flex: 1; min-width: 160px;">
+            <label>时间间隔</label>
+            <input type="text" name="interval" placeholder="30m / 1h / daily / 0 2 * * *" required>
+        </div>
+        <button type="submit" class="btn btn-primary">添加</button>
+    </form>
+</div>
+
+<!-- 调度列表 -->
+{% if schedules %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>名称</th>
+                <th>Crontab</th>
+                <th>描述</th>
+                <th>状态</th>
+                <th>上次运行</th>
+                <th>结果</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in schedules %}
+            <tr>
+                <td>{{ s.id }}</td>
+                <td>{{ s.name }}</td>
+                <td><code>{{ s.crontab }}</code></td>
+                <td>{{ s.description }}</td>
+                <td>
+                    {% if s.enabled %}
+                    <span class="status status-ok"><span class="dot dot-ok"></span>启用</span>
+                    {% else %}
+                    <span class="status status-warn"><span class="dot dot-warn"></span>禁用</span>
+                    {% endif %}
+                </td>
+                <td style="font-size: 0.8rem;">{{ s.last_run or "—" }}</td>
+                <td>
+                    {% if s.last_result == "OK" %}
+                    <span style="color: var(--green);">✓</span>
+                    {% elif s.last_result == "FAIL" %}
+                    <span style="color: var(--red);">✗</span>
+                    {% else %}
+                    <span style="color: var(--text-dim);">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form action="/schedules/{{ s.id }}/toggle" method="POST" style="display: inline;" hx-post="/schedules/{{ s.id }}/toggle" hx-target="body" hx-swap="innerHTML">
+                        <button class="btn btn-sm">{{ "禁用" if s.enabled else "启用" }}</button>
+                    </form>
+                    <form action="/schedules/{{ s.id }}/delete" method="POST" style="display: inline;" hx-post="/schedules/{{ s.id }}/delete" hx-target="body" hx-swap="innerHTML" onsubmit="return confirm('确定删除调度 {{ s.name }}？')">
+                        <button class="btn btn-sm btn-danger">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div style="margin-top: 16px;">
+    <form action="/schedules/run" method="POST" hx-post="/schedules/run" hx-target="body" hx-swap="innerHTML">
+        <button class="btn btn-primary">▶ 立即执行所有调度</button>
+    </form>
+</div>
+{% else %}
+<div class="card" style="text-align:center; padding: 48px;">
+    <p style="color: var(--text-dim);">暂无调度任务</p>
+    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 8px;">在上方表单中添加一个定时备份任务</p>
+</div>
+{% endif %}
+
+{% endblock %}

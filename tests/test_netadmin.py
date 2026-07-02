@@ -1179,5 +1179,180 @@ class TestScheduler:
             assert expr.describe() == expected
 
 
+# ═══════════════════════════════════════════════════════════════
+# notifier
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestNotifier:
+    def test_notification_config_empty(self) -> None:
+        """空配置默认 disabled"""
+        from netadmin.config import NotificationConfig
+
+        cfg = NotificationConfig()
+        assert cfg.enabled is False
+        assert cfg.telegram_token == ""
+        assert cfg.dingtalk_webhook == ""
+
+    def test_notification_config_from_dict(self) -> None:
+        """从 dict 构造"""
+        from netadmin.config import NotificationConfig
+
+        data = {"telegram_token": "123:abc", "telegram_chat_id": "-100123", "enabled": True}
+        cfg = NotificationConfig.from_dict(data)
+        assert cfg.enabled is True
+        assert cfg.telegram_token == "123:abc"
+
+    def test_alert_notifier_not_configured(self) -> None:
+        """未配置时 is_configured 返回 False"""
+        from netadmin.config import NotificationConfig
+        from netadmin.notifier import AlertNotifier
+
+        n = AlertNotifier(NotificationConfig())
+        assert n.is_configured() is False
+        assert n.send_alert("test", "message") == []
+
+    def test_health_alert_no_issues(self) -> None:
+        """正常报告不触发告警"""
+        from netadmin.config import NotificationConfig
+        from netadmin.notifier import AlertNotifier
+
+        n = AlertNotifier(NotificationConfig())
+        report = {
+            "cpu": "45% [green]OK[/]",
+            "memory": "67% [green]OK[/]",
+            "temperature": "N/A",
+            "log_errors": "0 (clean)",
+        }
+        result = n.send_health_alert(report, "10.0.0.1")
+        assert result == []
+
+    def test_health_alert_high_cpu(self) -> None:
+        """CPU 超标产生告警"""
+        from netadmin.config import NotificationConfig
+        from netadmin.notifier import AlertNotifier
+
+        n = AlertNotifier(NotificationConfig())
+        report = {
+            "cpu": "95% [red]HIGH[/]",
+            "memory": "67% [green]OK[/]",
+            "temperature": "N/A",
+            "log_errors": "0 (clean)",
+        }
+        result = n.send_health_alert(report, "10.0.0.1")
+        # 未配置渠道，不发
+        assert result == []
+
+    def test_health_alert_log_errors(self) -> None:
+        """日志错误产生告警"""
+        from netadmin.config import NotificationConfig
+        from netadmin.notifier import AlertNotifier
+
+        n = AlertNotifier(NotificationConfig())
+        report = {
+            "cpu": "45% [green]OK[/]",
+            "memory": "67% [green]OK[/]",
+            "temperature": "N/A",
+            "log_errors": "5",
+        }
+        result = n.send_health_alert(report, "10.0.0.1")
+        assert result == []
+
+    def test_audit_alert_perfect_score(self) -> None:
+        """满分不触发告警"""
+        from netadmin.config import NotificationConfig
+        from netadmin.notifier import AlertNotifier
+
+        n = AlertNotifier(NotificationConfig())
+        report = {
+            "host": "10.0.0.1",
+            "score": 100,
+            "findings": [
+                {"check": "Password Encryption", "passed": True, "detail": ""},
+                {"check": "SNMP Community", "passed": True, "detail": ""},
+            ],
+        }
+        result = n.send_audit_alert(report, "10.0.0.1")
+        assert result == []
+
+    def test_audit_alert_low_score(self) -> None:
+        """低分触发告警"""
+        from netadmin.config import NotificationConfig
+        from netadmin.notifier import AlertNotifier
+
+        n = AlertNotifier(NotificationConfig())
+        report = {
+            "host": "10.0.0.1",
+            "score": 50,
+            "findings": [
+                {"check": "Password Encryption", "passed": False, "detail": "No encryption"},
+            ],
+        }
+        result = n.send_audit_alert(report, "10.0.0.1")
+        assert result == []
+
+
+# ═══════════════════════════════════════════════════════════════
+# web dashboard
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestWebDashboard:
+    def test_dashboard_page_loads(self) -> None:
+        """仪表盘首页返回 200"""
+        from netadmin.web.app import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "netadmin" in resp.text
+
+    def test_backups_page_loads(self) -> None:
+        """备份页面返回 200"""
+        from netadmin.web.app import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/backups")
+        assert resp.status_code == 200
+
+    def test_schedules_page_loads(self) -> None:
+        """调度页面返回 200"""
+        from netadmin.web.app import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/schedules")
+        assert resp.status_code == 200
+
+    def test_backup_content_not_found(self) -> None:
+        """不存在的备份返回 404"""
+        from netadmin.web.app import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/backups/99999")
+        assert resp.status_code == 404
+
+    def test_backup_diff_not_found(self) -> None:
+        """不存在的备份对比返回 404"""
+        from netadmin.web.app import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/backups/diff/99998/99999")
+        assert resp.status_code == 404
+
+    def test_health_htmx_endpoint(self) -> None:
+        """HTMX 健康卡片端点返回 200"""
+        from netadmin.web.app import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
