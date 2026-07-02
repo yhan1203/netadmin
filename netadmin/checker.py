@@ -63,6 +63,11 @@ class HealthChecker:
             if m:
                 cpu = int(m.group(1))
                 return f"{cpu}%" + (" [red]HIGH[/]" if cpu > 80 else " [green]OK[/]")
+            # 中文 locale: "CPU 占用率 : 45%"
+            m = re.search(r"CPU.{0,8}占用率.*?(\d+)%", output)
+            if m:
+                cpu = int(m.group(1))
+                return f"{cpu}%" + (" [red]HIGH[/]" if cpu > 80 else " [green]OK[/]")
             m = re.search(r"(\d+)%\s*in\s+last", output)
             if m:
                 cpu = int(m.group(1))
@@ -82,6 +87,11 @@ class HealthChecker:
     def _parse_memory(output: str, vendor: str) -> str:
         if vendor == "huawei":
             m = re.search(r"Memory Using Percentage:\s*(\d+)%", output)
+            if m:
+                pct = int(m.group(1))
+                return f"{pct}%" + (" [red]HIGH[/]" if pct > 80 else " [green]OK[/]")
+            # 中文 locale: "内存利用率 : 67%"
+            m = re.search(r"内存.{0,8}利用率.*?(\d+)%", output)
             if m:
                 pct = int(m.group(1))
                 return f"{pct}%" + (" [red]HIGH[/]" if pct > 80 else " [green]OK[/]")
@@ -137,6 +147,11 @@ class HealthChecker:
     def _parse_temperature(output: str, vendor: str) -> str:
         if vendor == "huawei":
             m = re.search(r"Temperature\s*:\s*(\d+)", output)
+            if m:
+                t = int(m.group(1))
+                return f"{t}°C" + (" [red]HIGH[/]" if t > 65 else " [green]OK[/]")
+            # 中文 locale: "系统温度 : 45 摄氏度"
+            m = re.search(r"系统温度.*?(\d+)", output)
             if m:
                 t = int(m.group(1))
                 return f"{t}°C" + (" [red]HIGH[/]" if t > 65 else " [green]OK[/]")

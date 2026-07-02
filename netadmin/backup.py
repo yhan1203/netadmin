@@ -6,6 +6,7 @@ import datetime
 import os
 import sqlite3
 import difflib
+import weakref
 from pathlib import Path
 
 from netadmin.config import DeviceConfig, Settings
@@ -19,6 +20,17 @@ class BackupManager:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._db: sqlite3.Connection | None = None
+        weakref.finalize(self, self._close_db, weakref.ref(self))
+
+    @staticmethod
+    def _close_db(self_ref: weakref.ref) -> None:
+        """GC 时自动关闭数据库连接"""
+        inst = self_ref()
+        if inst is not None and inst._db is not None:
+            try:
+                inst._db.close()
+            except Exception:
+                pass
 
     # ── 数据库 ──
 

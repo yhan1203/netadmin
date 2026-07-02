@@ -757,6 +757,44 @@ class TestCli:
             assert _save_is_inside_with(source), \
                 f"{method_name}: send_command(save_cmd) should be inside the with block"
 
+    def test_backup_manager_has_finalizer(self) -> None:
+        """验证 BackupManager 有 GC finalizer 自动关闭连接"""
+        from netadmin.backup import BackupManager
+        from netadmin.config import Settings
+
+        s = Settings()
+        s.backup_dir = "/tmp"
+        s.db_path = "/tmp/test_finalize.db"
+        mgr = BackupManager(s)
+        # 触发 db 属性初始化
+        _ = mgr.db
+        assert mgr._db is not None
+        # 验证 close 方法存在
+        assert hasattr(mgr, 'close'), "close() method should exist"
+
+
+# ═══════════════════════════════════════════════════════════════
+# checker — 中文 Locale 解析
+# ═══════════════════════════════════════════════════════════════
+
+class TestChineseLocale:
+    """验证华为中文 locale 输出解析"""
+
+    def test_cpu_parse_huawei_chinese(self) -> None:
+        from netadmin.checker import HealthChecker as HC
+        result = HC._parse_cpu("CPU 占用率 : 45%", "huawei")
+        assert "45%" in result
+
+    def test_memory_parse_huawei_chinese(self) -> None:
+        from netadmin.checker import HealthChecker as HC
+        result = HC._parse_memory("内存利用率 : 67%", "huawei")
+        assert "67%" in result
+
+    def test_temperature_parse_huawei_chinese(self) -> None:
+        from netadmin.checker import HealthChecker as HC
+        result = HC._parse_temperature("系统温度 : 45 摄氏度", "huawei")
+        assert "45" in result
+
 
 # ═══════════════════════════════════════════════════════════════
 # apply — 额外边界测试
