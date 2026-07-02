@@ -118,7 +118,7 @@ class ConfigLearner:
                     vlans.append({"id": int(v), "name": ""})
 
             # vlan 10 / name office
-            for m in re.finditer(r"^vlan\s+(\d+)\s*$", config, re.MULTILINE):
+            for m in re.finditer(r"^\s*vlan\s+(\d+)\s*$", config, re.MULTILINE):
                 vlan_id = int(m.group(1))
                 name = ""
                 # 看下一行是不是 name
@@ -130,7 +130,7 @@ class ConfigLearner:
                     vlans.append({"id": vlan_id, "name": name})
         else:
             # Cisco: vlan 10 / name office
-            for m in re.finditer(r"^vlan\s+(\d+)", config, re.MULTILINE):
+            for m in re.finditer(r"^\s*vlan\s+(\d+)", config, re.MULTILINE):
                 vlan_id = int(m.group(1))
                 name = ""
                 after = config[config.index(m.group(0)) + len(m.group(0)):].strip().split("\n")[0]
@@ -227,7 +227,7 @@ class ConfigLearner:
             snmp["community"].append(m.group(1))
         for m in re.finditer(r"snmp[_-]server[_\s]community\s+(\S+)", config, re.IGNORECASE):
             snmp["community"].append(m.group(1))
-        m = re.search(r"snmp[_-]location\s+(.+)", config, re.IGNORECASE)
+        m = re.search(r"(?:snmp-server location|snmp-agent sys-info location|snmp[_-]location)\s+(.+)", config, re.IGNORECASE)
         if m:
             snmp["location"] = m.group(1).strip().strip('"')
         m = re.search(r"snmp[_-]contact\s+(.+)", config, re.IGNORECASE)
@@ -241,7 +241,7 @@ class ConfigLearner:
         config = self._raw_config
         stp: dict = {"mode": "", "root_primary": False}
 
-        for mode in ["mstp", "rstp", "stp", "pvst"]:
+        for mode in ["mstp", "rstp", "stp", "pvst", "rapid-pvst"]:
             if re.search(rf"(stp[_\s]mode|spanning-tree[_\s]mode)\s+{mode}", config, re.IGNORECASE):
                 stp["mode"] = mode
                 break
