@@ -695,11 +695,15 @@ def _resolve_devices(hosts: tuple[str, ...] | None = None,
             console.print("[yellow]No devices configured. Create a config.yaml file or pass device details via command line options.[/]")
         sys.exit(1)
     if username or password:
+        result = []
         for d in devices:
+            d_copy = dict(d)
             if username:
-                d["username"] = username
+                d_copy["username"] = username
             if password:
-                d["password"] = password
+                d_copy["password"] = password
+            result.append(d_copy)
+        return result
     return devices
 
 
@@ -707,11 +711,14 @@ def _resolve_devices(hosts: tuple[str, ...] | None = None,
 
 
 @cli.command()
-@click.option("--host", default="0.0.0.0", help="监听地址")
+@click.option("--host", default="127.0.0.1", help="监听地址（默认仅本地访问）")
 @click.option("--port", "-p", default=8099, type=int, help="监听端口")
 @click.option("--reload", is_flag=True, help="热重载（开发用）")
 def web(host: str, port: int, reload: bool) -> None:
     """启动 Web 仪表盘 (FastAPI + HTMX)"""
+    if host == "0.0.0.0":
+        console.print("[yellow]⚠ Listening on 0.0.0.0 — accessible to all network hosts[/]")
+        console.print("[yellow]  Set NETADMIN_WEB_USER and NETADMIN_WEB_PASS for authentication[/]")
     console.print(f"[bold green]✓[/] Starting web dashboard at [underline]http://{host}:{port}[/]")
     console.print("[dim]Press Ctrl+C to stop[/]")
     from netadmin.web.app import run_web

@@ -15,10 +15,12 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
+from urllib.parse import urlencode, urlparse
 
 from netadmin.config import NotificationConfig
 
@@ -83,15 +85,27 @@ class AlertNotifier:
         return sent
 
     def _format_message(self, alert: Alert) -> str:
-        """格式化告警文本（去掉 Rich 标记）"""
-        import re
-        msg = re.sub(r"\[/?\w+\]", "", alert.message).strip()
-        parts = [f"🏷 {alert.title}"] if alert.title else []
-        parts.append(f"📟 {alert.device}")
+        """格式化告警文本（去掉 Rich 标记，转义 Markdown 特殊字符）"""
+        # 去掉 Rich 标记 [red], [green], [/] 等
+        msg = re.sub(r"\[/?\w+(?:\s+\w+)*\]", "", alert.message).strip()
+        # 转义 Markdown 特殊字符（Telegram parse_mode=Markdown）
+        msg = self._escape_markdown(msg)
+        device = self._escape_markdown(alert.device)
+        title = self._escape_markdown(alert.title) if alert.title else ""
+        level = self._escape_markdown(alert.level)
+        parts = [f"🏷 {title}"] if title else []
+        parts.append(f"📟 {device}")
         parts.append(f"📝 {msg}")
-        parts.append(f"🔔 {alert.level}")
+        parts.append(f"🔔 {level}")
         parts.append(f"⏰ {time.strftime('%Y-%m-%d %H:%M:%S')}")
         return "\n".join(parts)
+
+    @staticmethod
+    def _escape_markdown(text: str) -> str:
+        """转义 Telegram Markdown 特殊字符"""
+        for ch in ("_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"):
+            text = text.replace(ch, f"\\{ch}")
+        return text
 
     # ── Telegram ─────────────────────────────────────────────
 
@@ -113,9 +127,11 @@ class AlertNotifier:
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status != 200:
-                    body = resp.read().decode("utf-8", errors="replace")[:200]
-                    raise NotificationError(f"Telegram API returned {resp.status}: {body}")
+                body = resp.read().decode("utf-8", errors="replace")[:500]
+                result = json.loads(body)
+                if not result.get("ok", False):
+                    desc = result.get("description", body)
+                    raise NotificationError(f"Telegram API error: {desc}")
         except urllib.error.URLError as e:
             raise NotificationError(f"Telegram connection failed: {e}") from e
 
@@ -126,7 +142,12 @@ class AlertNotifier:
         text = self._format_message(alert)
         url = self.config.dingtalk_webhook
 
-        # 签名（如果配置了 secret）
+        # 验证 URL 格式
+        parsed = urlparse(url)
+        if parsed.scheme not in ("https",):
+            raise NotificationError(f"DingTalk webhook must use HTTPS, got: {parsed.scheme}")
+
+        # 签名（如果配置了 secret），用 urlencode 正确拼接参数
         if self.config.dingtalk_secret:
             timestamp = str(round(time.time() * 1000))
             sign_str = f"{timestamp}\n{self.config.dingtalk_secret}"
@@ -135,7 +156,8 @@ class AlertNotifier:
                 sign_str.encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
-            url += f"&timestamp={timestamp}&sign={sign}"
+            separator = "&" if parsed.query else "?"
+            url += f"{separator}timestamp={timestamp}&sign={sign}"
 
         payload = json.dumps({
             "msgtype": "text",
@@ -150,7 +172,10 @@ class AlertNotifier:
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 body = resp.read().decode("utf-8", errors="replace")[:500]
-                result = json.loads(body)
+                try:
+                    result = json.loads(body)
+                except json.JSONDecodeError:
+                    raise NotificationError(f"DingTalk returned non-JSON response: {body[:200]}")
                 if result.get("errcode", -1) != 0:
                     raise NotificationError(f"DingTalk API error: {result.get('errmsg', body)}")
         except urllib.error.URLError as e:

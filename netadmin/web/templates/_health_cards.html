@@ -14,15 +14,15 @@
             {% else %}
             <div class="metric">
                 <span class="metric-label">🖥 CPU</span>
-                <span class="metric-value">{{ card.cpu.replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
+                <span class="metric-value">{{ (card.cpu|string).replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
             </div>
             <div class="metric">
                 <span class="metric-label">🧠 内存</span>
-                <span class="metric-value">{{ card.memory.replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
+                <span class="metric-value">{{ (card.memory|string).replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
             </div>
             <div class="metric">
                 <span class="metric-label">🌡 温度</span>
-                <span class="metric-value">{{ card.temperature.replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
+                <span class="metric-value">{{ (card.temperature|string).replace("[red]HIGH[/]", "🔥").replace("[green]OK[/]", "") }}</span>
             </div>
             <div class="metric">
                 <span class="metric-label">⏱ 运行时间</span>

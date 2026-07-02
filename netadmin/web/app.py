@@ -11,9 +11,14 @@
 
 from __future__ import annotations
 
+import base64
+import os
+import typing as t
+import urllib.parse
 from pathlib import Path
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -28,6 +33,84 @@ TEMPLATE_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="netadmin Dashboard", version="0.1.0")
+
+# ── Basic Auth ────────────────────────────────────────────────
+# 通过环境变量 NETADMIN_WEB_USER / NETADMIN_WEB_PASS 配置
+# 不配置则默认无认证（仅监听 127.0.0.1）
+
+_WEB_USER = os.environ.get("NETADMIN_WEB_USER", "")
+_WEB_PASS = os.environ.get("NETADMIN_WEB_PASS", "")
+
+
+def _check_auth(request: Request) -> bool:
+    """验证 Basic Auth"""
+    if not _WEB_USER and not _WEB_PASS:
+        return True  # 未配置认证，放行
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(auth[6:]).decode("utf-8")
+        user, _, passwd = decoded.partition(":")
+        return user == _WEB_USER and passwd == _WEB_PASS
+    except Exception:
+        return False
+
+
+def _require_auth(request: Request) -> None:
+    """如果配置了认证但请求未通过，抛出 401"""
+    if not _check_auth(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": 'Basic realm="netadmin"'},
+        )
+
+
+# ── CSRF 保护 ─────────────────────────────────────────────────
+# 验证 POST 请求的 Origin/Referer 头，防止跨站请求伪造
+
+_CSRF_ORIGINS = os.environ.get("NETADMIN_CSRF_ORIGINS", "").split(",") if os.environ.get("NETADMIN_CSRF_ORIGINS") else []
+
+
+def _check_csrf(request: Request) -> None:
+    """检查 POST 请求的 Origin/Referer"""
+    if request.method != "POST":
+        return
+    origin = request.headers.get("Origin", "")
+    referer = request.headers.get("Referer", "")
+    # 无 Origin/Referer 的 POST 放行（CLI curl 等）
+    if not origin and not referer:
+        return
+    # 检查是否匹配允许的来源
+    allowed = _CSRF_ORIGINS or ["http://127.0.0.1", "http://localhost"]
+    for h in (origin, referer):
+        if h:
+            parsed = urlparse(h)
+            origin_host = f"{parsed.scheme}://{parsed.netloc}"
+            if origin_host in allowed:
+                return
+    # 不匹配则拒绝
+    raise HTTPException(status_code=403, detail="CSRF check failed")
+
+
+# ── 安全中间件 ────────────────────────────────────────────────
+
+
+@app.middleware("http")
+async def _security_middleware(request: Request, call_next: t.Any) -> Response:
+    """全局安全中间件：Basic Auth + CSRF 保护"""
+    try:
+        _require_auth(request)
+        _check_csrf(request)
+    except HTTPException as e:
+        return Response(
+            content="Unauthorized" if e.status_code == 401 else "CSRF check failed",
+            status_code=e.status_code,
+            headers=e.headers or {},
+        )
+    return await call_next(request)
+
 
 # 手动创建 Jinja2 环境（绕过 Starlette Jinja2Templates 与 Jinja2 3.1.6 的兼容问题）
 _jinja_env = Environment(
@@ -246,7 +329,13 @@ def _escape_html(text: str) -> str:
 
 def run_web(host: str = "0.0.0.0", port: int = 8099, reload: bool = False) -> None:
     """启动 Web 服务器"""
-    import uvicorn
+    try:
+        import uvicorn  # noqa: F811
+    except ImportError:
+        raise ImportError(
+            "uvicorn is required for the web dashboard. "
+            "Install with: pip install netadmin[web]"
+        )
     uvicorn.run("netadmin.web.app:app", host=host, port=port, reload=reload)
 
 
