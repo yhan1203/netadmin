@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 备份
+backups/
+
+# 数据库
+netadmin.db
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 环境
+.env
+*.local.yaml
+
+# 系统
+.DS_Store
+Thumbs.db
