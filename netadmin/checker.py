@@ -127,9 +127,10 @@ class HealthChecker:
             if m:
                 return m.group(1).strip()
         else:
-            m = re.search(r"(.+?)\s+(?:uptime|UPTIME|is up)\s+.*?(\d+\s+\w+)", output)
+            # Cisco: "WS-C2960X-24PS-L uptime is 2 years, 5 days, 10 hours, 30 minutes"
+            m = re.search(r"uptime\s+is\s+(.+)", output, re.IGNORECASE)
             if m:
-                return m.group(2).strip()
+                return m.group(1).strip()
         return ""
 
     @staticmethod

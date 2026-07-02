@@ -60,7 +60,7 @@ class ConfigApplier:
                 enter = resolve("enter_config_mode", target_config["vendor"])
                 conn.send_command(str(enter))
 
-                outputs = conn.send_config_set(commands)
+                conn.send_config_set(commands)
             except ConnectorError as e:
                 self._results.append({
                     "command": "(batch)",
@@ -123,7 +123,7 @@ class ConfigApplier:
                 if vlan_ids:
                     commands.append(f"vlan batch {' '.join(vlan_ids)}")
                 for v in vlans:
-                    if v.get("name"):
+                    if v["id"] > 1 and v.get("name"):
                         commands.append(f"vlan {v['id']}")
                         commands.append(f"name {v['name']}")
             else:

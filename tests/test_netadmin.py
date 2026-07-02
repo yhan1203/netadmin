@@ -822,6 +822,25 @@ class TestApplyExtras:
         # SNMP
         assert "snmp-server community public RO" in cmds
 
+    def test_apply_huawei_vlan1_name_skipped(self) -> None:
+        """验证华为 VLAN 1 的 name 不会被下发"""
+        from netadmin.apply import ConfigApplier
+        applier = ConfigApplier()
+        template = {
+            "device": {"hostname": "SW-TEST", "vendor": "huawei"},
+            "vlans": [{"id": 1, "name": "default"}, {"id": 10, "name": "office"}],
+            "interfaces": [],
+        }
+        cfg = {"host": "10.0.0.8", "vendor": "huawei", "name": "SW-TEST",
+               "device_type": "huawei", "port": 22, "username": "admin", "password": "", "timeout": 30}
+        cmds = applier._build_config_commands(template, cfg)
+        # VLAN 1 不应出现在命令中（vlan 1 或 name default）
+        vlan1_cmds = [c for c in cmds if c.strip() in ("vlan 1", "name default")]
+        assert not vlan1_cmds, f"VLAN 1 commands should not appear: {vlan1_cmds}"
+        # VLAN 10 应正常出现
+        assert "vlan batch 10" in cmds or "vlan 10" in cmds
+        assert "name office" in cmds
+
 
 # ═══════════════════════════════════════════════════════════════
 # checker — 额外审计测试
