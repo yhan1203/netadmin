@@ -18,7 +18,7 @@ from rich import box
 from netadmin import __version__
 from netadmin.config import Settings
 from netadmin.connector import Connector, test_connection, ConnectorError
-from netadmin.commands import resolve, list_commands
+from netadmin.commands import list_commands
 from netadmin.backup import BackupManager
 from netadmin.learn import ConfigLearner
 from netadmin.apply import ConfigApplier

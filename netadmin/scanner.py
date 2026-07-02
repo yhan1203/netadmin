@@ -7,7 +7,6 @@ import ipaddress
 import socket
 import subprocess
 import time
-import typing as t
 
 
 class NetworkScanner:

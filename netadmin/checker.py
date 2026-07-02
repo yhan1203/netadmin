@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import typing as t
 
 from netadmin.config import DeviceConfig
 from netadmin.commands import resolve

@@ -28,8 +28,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          pip install ruff
-          ruff check netadmin/ tests/ --ignore=E501,F401 --quiet || true
+          ruff check netadmin/ tests/ --quiet || true
 
       - name: Test with pytest
         run: |

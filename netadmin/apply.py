@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import re
-import typing as t
 from pathlib import Path
 
 import yaml
@@ -99,8 +98,15 @@ class ConfigApplier:
         """把模板转成目标设备的配置命令
 
         替换 {{HOSTNAME}} 等占位符为目标设备的值。
+
+        Raises:
+            ValueError: 模板字段类型不正确时
         """
         commands: list[str] = []
+
+        if not isinstance(template, dict):
+            raise ValueError("Template must be a YAML dictionary")
+
         vendor = target.get("vendor", "cisco").lower()
         hostname = target.get("name", target["host"])
 
@@ -109,6 +115,26 @@ class ConfigApplier:
             "MGMT_IP": target["host"],
         }
 
+        # 校验模板字段类型
+        vlans = template.get("vlans", [])
+        if not isinstance(vlans, list):
+            raise ValueError("'vlans' must be a list")
+        for v in vlans:
+            if not isinstance(v, dict):
+                raise ValueError(f"Each VLAN entry must be a dict, got {type(v).__name__}: {v}")
+
+        interfaces = template.get("interfaces", [])
+        if not isinstance(interfaces, list):
+            raise ValueError("'interfaces' must be a list")
+        for iface in interfaces:
+            if not isinstance(iface, dict):
+                raise ValueError(f"Each interface entry must be a dict, got {type(iface).__name__}: {iface}")
+
+        for key in ("ntp", "snmp", "stp", "management"):
+            val = template.get(key)
+            if val is not None and not isinstance(val, dict):
+                raise ValueError(f"'{key}' must be a dict, got {type(val).__name__}")
+
         # ── 基本配置 ──
         if vendor == "huawei":
             commands.append("sysname " + hostname.replace(".", "_"))
@@ -116,7 +142,6 @@ class ConfigApplier:
             commands.append(f"hostname {hostname}")
 
         # ── VLAN ──
-        vlans = template.get("vlans", [])
         if vlans:
             if vendor == "huawei":
                 vlan_ids = [str(v["id"]) for v in vlans if v["id"] > 1]
@@ -204,10 +229,7 @@ class ConfigApplier:
                     if stp.get("root_primary"):
                         commands.append("stp root primary")
                 else:
-                    if mode in ("mstp", "rstp", "pvst", "rapid-pvst"):
-                        commands.append(f"spanning-tree mode {mode}")
-                    else:
-                        commands.append(f"spanning-tree mode {mode}")
+                    commands.append(f"spanning-tree mode {mode}")
                     if stp.get("root_primary"):
                         commands.append("spanning-tree vlan 1 root primary")
 

@@ -879,6 +879,27 @@ class TestApplyExtras:
         assert "vlan batch 10" in cmds or "vlan 10" in cmds
         assert "name office" in cmds
 
+    def test_apply_template_validation(self) -> None:
+        """验证模板格式校验"""
+        import pytest
+        from netadmin.apply import ConfigApplier
+        applier = ConfigApplier()
+        cfg = {"host": "10.0.0.9", "vendor": "cisco", "name": "SW-TEST",
+               "device_type": "cisco_ios", "port": 22, "username": "admin", "password": "", "timeout": 30}
+
+        # vlans 不是 list
+        with pytest.raises(ValueError, match="vlans.*must be a list"):
+            applier._build_config_commands({"vlans": "bad"}, cfg)
+
+        # interfaces 包含非 dict 元素
+        with pytest.raises(ValueError, match="Each interface entry must be a dict"):
+            applier._build_config_commands({"interfaces": ["bad"]}, cfg)
+
+        # ntp 不是 dict
+        with pytest.raises(ValueError, match="ntp.*must be a dict"):
+            applier._build_config_commands({"ntp": "bad"}, cfg)
+
+
 
 # ═══════════════════════════════════════════════════════════════
 # checker — 额外审计测试

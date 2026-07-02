@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import os
 import sqlite3
 import difflib
 import weakref
