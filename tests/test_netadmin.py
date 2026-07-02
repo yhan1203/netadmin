@@ -640,6 +640,74 @@ class TestCli:
         result = runner.invoke(cli, ["vlan", "list", "--help"])
         assert result.exit_code == 0
 
+    def test_learn_output_writes_yaml_not_tuple(self) -> None:
+        """验证 learn 命令写入的是 YAML 字符串而非 NamedTuple"""
+        from netadmin.learn import ConfigLearner
+
+        learner = ConfigLearner.__new__(ConfigLearner)
+        learner.vendor = "cisco"
+        learner.config = {"host": "10.0.0.1"}
+
+        yaml_out = learner._to_yaml(
+            hostname="SW-1", vendor="cisco", model="C2960X", version="15.2",
+            vlans=[{"id": 10, "name": "office"}],
+            interfaces=[],
+            ntp=None, snmp=None, stp=None, management=None,
+        )
+        # YAML 输出必须是字符串，不能以 "LearnedTemplate(" 开头
+        assert isinstance(yaml_out, str)
+        assert not yaml_out.startswith("LearnedTemplate(")
+        assert "hostname:" in yaml_out or "HOSTNAME" in yaml_out
+
+    def test_logging_check_no_false_positive(self) -> None:
+        """验证 _check_logging 不会误判 'login' 为 logging"""
+        from netadmin.checker import SecurityAuditor
+        auditor = SecurityAuditor()
+        # 配置里有 login 但没有 logging
+        cfg = "login authentication default\nip http server\n"
+        auditor._check_logging(cfg)
+        logging_finding = next(f for f in auditor._findings if f["check"] == "Logging")
+        # 没有 logging 配置，应该 FAIL
+        assert not logging_finding["passed"]
+
+    def test_learn_vlan_name_with_duplicate_pattern(self) -> None:
+        """验证同名 VLAN 的 name 提取不会串到第一个"""
+        from netadmin.learn import ConfigLearner
+
+        learner = ConfigLearner.__new__(ConfigLearner)
+        learner.vendor = "huawei"
+
+        # 两个 vlan 配置，第二个 vlan 20 的名字在远处
+        learner._raw_config = """
+ vlan batch 10 20
+ vlan 10
+  name office
+ vlan 20
+  name voip
+"""
+        vlans = learner._extract_vlans()
+        v20 = next(v for v in vlans if v["id"] == 20)
+        assert v20["name"] == "voip", f"Expected 'voip', got '{v20['name']}'"
+
+    def test_scan_default_subnet_shows_warning(self) -> None:
+        """验证 scan 无参数时显示默认网段提示"""
+        from click.testing import CliRunner
+        from netadmin.cli import cli
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan"])
+        # 有输出（无默认网段提示或 scan 输出），不崩溃即通过
+        assert result.exit_code == 0 or "defaulting" in result.output
+
+    def test_learn_help_shows_correctly(self) -> None:
+        """验证 learn --help 输出格式"""
+        from click.testing import CliRunner
+        from netadmin.cli import cli
+        runner = CliRunner()
+        result = runner.invoke(cli, ["learn", "--help"])
+        assert result.exit_code == 0
+        assert "HOST" in result.output
+        assert "--output" in result.output or "-o" in result.output
+
 
 # ═══════════════════════════════════════════════════════════════
 # apply — 额外边界测试

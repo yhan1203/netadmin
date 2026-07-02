@@ -224,17 +224,14 @@ class SecurityAuditor:
     def _check_ssh_version(self, config: str) -> None:
         if "ssh version 2" in config.lower() or "ssh server" in config.lower():
             self._add_finding("SSH Version", True, "SSH v2 configured")
-        elif "ip ssh version 2" in config or "ip ssh version 1" in config:
+        elif "ip ssh version" in config:
             if "version 2" in config:
                 self._add_finding("SSH Version", True, "SSH v2 configured")
             else:
                 self._add_finding("SSH Version", False, "SSH v1 configured — upgrade to v2")
         else:
-            # Cisco 默认 SSH v1，华为默认 SSH v2
-            if "huawei" in config.lower():
-                self._add_finding("SSH Version", True, "SSH v2 (default for Huawei)")
-            else:
-                self._add_finding("SSH Version", True, "SSH configured (assumed v2)")
+            # 没有明确 SSH 配置，默认为通过（保守判断）
+            self._add_finding("SSH Version", True, "SSH configured (assumed v2)")
 
     def _check_vty_acl(self, config: str, vendor: str) -> None:
         if vendor == "huawei":
@@ -272,7 +269,7 @@ class SecurityAuditor:
                 self._add_finding("Default VLAN 1", True, "VLAN 1 not in use on ports")
 
     def _check_logging(self, config: str) -> None:
-        if "log" in config.lower() and ("syslog" in config.lower() or "logbuffer" in config.lower()):
+        if re.search(r"log(?:ging|buffer|_host)", config, re.IGNORECASE):
             self._add_finding("Logging", True, "Logging configured")
         else:
             self._add_finding("Logging", False, "No logging configured")

@@ -117,25 +117,31 @@ class ConfigLearner:
                 for v in re.findall(r"\d+", m.group(1)):
                     vlans.append({"id": int(v), "name": ""})
 
-            # vlan 10 / name office
+            # vlan 10 / name office  — 使用 m.start() 定位而非 config.index()
             for m in re.finditer(r"^\s*vlan\s+(\d+)\s*$", config, re.MULTILINE):
                 vlan_id = int(m.group(1))
                 name = ""
                 # 看下一行是不是 name
-                after = config[config.index(m.group(0)) + len(m.group(0)):].strip().split("\n")[0]
-                if after.startswith("name "):
-                    name = after[5:].strip().strip('"')
-                # 去重
-                if not any(v["id"] == vlan_id for v in vlans):
+                remaining = config[m.end():]
+                next_line = remaining.strip().split("\n")[0] if remaining.strip() else ""
+                if next_line.startswith("name "):
+                    name = next_line[5:].strip().strip('"')
+                # 去重并补 name（batch 添加的 VLAN 没有 name）
+                existing = next((v for v in vlans if v["id"] == vlan_id), None)
+                if existing:
+                    if name and not existing["name"]:
+                        existing["name"] = name
+                else:
                     vlans.append({"id": vlan_id, "name": name})
         else:
-            # Cisco: vlan 10 / name office
+            # Cisco: vlan 10 / name office  — 使用 m.start() 定位而非 config.index()
             for m in re.finditer(r"^\s*vlan\s+(\d+)", config, re.MULTILINE):
                 vlan_id = int(m.group(1))
                 name = ""
-                after = config[config.index(m.group(0)) + len(m.group(0)):].strip().split("\n")[0]
-                if after.startswith("name "):
-                    name = after[5:].strip().strip('"')
+                remaining = config[m.end():]
+                next_line = remaining.strip().split("\n")[0] if remaining.strip() else ""
+                if next_line.startswith("name "):
+                    name = next_line[5:].strip().strip('"')
                 if not any(v["id"] == vlan_id for v in vlans):
                     vlans.append({"id": vlan_id, "name": name})
 

@@ -348,10 +348,10 @@ def learn(host: str, output: str | None, username: str | None, password: str | N
 
     if output:
         dst = Path(output)
-        dst.write_text(template, encoding="utf-8")
+        dst.write_text(template.raw_yaml, encoding="utf-8")
         console.print(f"[green]✓[/] Template saved to [bold]{dst}[/]")
     else:
-        console.print(Syntax(template, "yaml", theme="monokai", word_wrap=True))
+        console.print(Syntax(template.raw_yaml, "yaml", theme="monokai", word_wrap=True))
 
     console.print(f"\n[dim]Learned: VLANs={len(template.vlans)}, Interfaces={len(template.interfaces)}, "
                   f"NTP={'yes' if template.ntp else 'no'}, SNMP={'yes' if template.snmp else 'no'}[/]")
@@ -368,7 +368,6 @@ def learn(host: str, output: str | None, username: str | None, password: str | N
 @click.option("--dry-run", is_flag=True, help="试运行，不实际执行")
 def apply(template: str, device: str, username: str | None, password: str | None, dry_run: bool) -> None:
     """按模板配置目标设备（画虎）"""
-    from netadmin.apply import ConfigApplier
 
     targets = [h.strip() for h in device.split(",")]
     applier = ConfigApplier()
@@ -410,10 +409,11 @@ def apply(template: str, device: str, username: str | None, password: str | None
 @click.argument("subnet", required=False)
 @click.option("--timeout", default=3, help="Ping 超时（秒）", type=int)
 @click.option("--threads", default=50, help="并发数", type=int)
-def scan(subnet: str | None, timeout: int, threads: int) -> None:
+def scan(subnet: str, timeout: int, threads: int) -> None:
     """扫描网段发现网络设备"""
     if not subnet:
         subnet = "192.168.1.0/24"
+        console.print("[yellow]No subnet specified, defaulting to 192.168.1.0/24[/]")
 
     scanner = NetworkScanner()
     with console.status(f"Scanning {subnet}..."):
@@ -534,7 +534,10 @@ def _resolve_devices(hosts: tuple[str, ...] | None = None,
 
     devices = settings.all_devices()
     if not devices:
-        console.print("[yellow]No devices in config.yaml. Use -d to specify hosts directly.[/]")
+        if username or password:
+            console.print("[yellow]No devices configured in config.yaml. Use -d HOST to target specific devices, or create a config.yaml with your devices.[/]")
+        else:
+            console.print("[yellow]No devices configured. Create a config.yaml file or pass device details via command line options.[/]")
         sys.exit(1)
     if username or password:
         for d in devices:
